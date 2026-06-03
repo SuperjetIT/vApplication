@@ -82,12 +82,16 @@ export function Navbar({
   setActiveTab,
   isMobile,
   isLoggedIn = false,
+  avatarInitials,
+  avatarColor,
   profilePhotoUrl,
 }: {
   activeTab: 'explore' | 'events'
   setActiveTab: (tab: 'explore' | 'events') => void
   isMobile: boolean
   isLoggedIn?: boolean
+  avatarInitials?: string
+  avatarColor?: string
   profilePhotoUrl?: string
 }) {
   const tabStyle = (active: boolean): CSSProperties => ({
@@ -190,13 +194,16 @@ export function Navbar({
         </a>
 
         <Link
-          to="/sign-in"
+          to={isLoggedIn ? '/user/me' : '/sign-in'}
           style={{
             ...iconCircle,
             overflow: 'hidden',
             textDecoration: 'none',
+            border: isLoggedIn ? '2px solid #fff' : iconCircle.border,
+            boxShadow: isLoggedIn ? '0 2px 8px rgba(0,0,0,0.12)' : undefined,
           }}
-          aria-label={isLoggedIn ? 'Profile' : 'Sign in'}
+          aria-label={isLoggedIn ? `Profile: ${avatarInitials ?? 'Account'}` : 'Sign in'}
+          title={isLoggedIn ? 'Signed in' : 'Sign in'}
         >
           {isLoggedIn && profilePhotoUrl ? (
             <img
@@ -204,6 +211,24 @@ export function Navbar({
               alt=""
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
+          ) : isLoggedIn && avatarInitials ? (
+            <span
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: avatarColor ?? BRAND,
+                color: '#fff',
+                fontSize: 14,
+                fontWeight: 700,
+                letterSpacing: '-0.02em',
+                fontFamily: 'inherit',
+              }}
+            >
+              {avatarInitials}
+            </span>
           ) : (
             <PersonSvg />
           )}

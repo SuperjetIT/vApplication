@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
+import { useAuth } from '../context/AuthContext'
 import {
   countries,
   getProcessingDays,
@@ -499,6 +500,7 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
 }
 
 export default function HomePage() {
+  const { isLoggedIn, avatarInitials, avatarColor } = useAuth()
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<'explore' | 'events'>('explore')
   const [openDropdown, setOpenDropdown] = useState<OpenDropdown>(null)
@@ -780,7 +782,14 @@ export default function HomePage() {
           background: 'linear-gradient(160deg, #fff8f8 0%, #fff 40%, #f8f8ff 100%)',
         }}
       >
-        <Navbar activeTab={activeTab} setActiveTab={setActiveTab} isMobile={isMobile} />
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isMobile={isMobile}
+          isLoggedIn={isLoggedIn}
+          avatarInitials={avatarInitials}
+          avatarColor={avatarColor}
+        />
 
         <section
           ref={heroRef}
