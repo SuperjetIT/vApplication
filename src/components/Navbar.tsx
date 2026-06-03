@@ -41,15 +41,6 @@ function TicketSvg({ active }: { active?: boolean }) {
   )
 }
 
-function SearchSvg() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="11" cy="11" r="7" stroke="#666" strokeWidth="1.5" />
-      <path d="M20 20l-3.5-3.5" stroke="#666" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 function WhatsAppSvg() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden>
@@ -92,14 +83,12 @@ export function Navbar({
   isMobile,
   isLoggedIn = false,
   profilePhotoUrl,
-  onSearchClick,
 }: {
   activeTab: 'explore' | 'events'
   setActiveTab: (tab: 'explore' | 'events') => void
   isMobile: boolean
   isLoggedIn?: boolean
   profilePhotoUrl?: string
-  onSearchClick?: () => void
 }) {
   const tabStyle = (active: boolean): CSSProperties => ({
     display: 'inline-flex',
@@ -184,12 +173,6 @@ export function Navbar({
           gap: 10,
         }}
       >
-        {!isMobile && (
-          <button type="button" onClick={onSearchClick} style={iconCircle} aria-label="Search">
-            <SearchSvg />
-          </button>
-        )}
-
         <a
           href="https://wa.me/971559641020"
           target="_blank"

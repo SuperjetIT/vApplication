@@ -157,6 +157,7 @@ function DropdownOption({
         borderRadius: 8,
         background: selected ? '#fff8f8' : 'transparent',
         cursor: 'pointer',
+        pointerEvents: 'all',
         fontSize: 15,
         textAlign: 'left',
         color: '#111827',
@@ -206,15 +207,16 @@ function CalendarPopup({
     <div
       style={{
         position: 'absolute',
-        top: 'calc(100% + 8px)',
-        right: 0,
+        top: '110%',
+        left: 0,
         width: 320,
         background: '#ffffff',
         borderRadius: '20px',
         boxShadow: '0 8px 40px rgba(249,62,66,0.15)',
         border: '1px solid rgba(249,62,66,0.12)',
         padding: 16,
-        zIndex: 200,
+        zIndex: 99999,
+        pointerEvents: 'all',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -575,14 +577,15 @@ export default function HomePage() {
 
   const dropdownStyle: CSSProperties = {
     position: 'absolute',
-    top: 'calc(100% + 8px)',
+    zIndex: 99999,
+    top: '110%',
     left: 0,
     minWidth: 280,
-    background: '#fff',
+    background: '#ffffff',
     borderRadius: 16,
     boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
     padding: 16,
-    zIndex: 200,
+    pointerEvents: 'all',
   }
 
   const filterBarInner = (
@@ -599,6 +602,7 @@ export default function HomePage() {
         maxWidth: 1100,
         margin: '0 auto',
         boxShadow: '0 4px 20px rgba(249,62,66,0.06)',
+        overflow: 'visible',
       }}
     >
       <div style={{ position: 'relative', flex: isMobile ? '0 0 auto' : 1, minWidth: isMobile ? 140 : undefined, borderRight: '1px solid #eee' }}>
@@ -759,8 +763,12 @@ export default function HomePage() {
           }
           .home-filter-scroll {
             overflow-x: auto;
+            overflow-y: visible;
             flex-wrap: nowrap !important;
             -webkit-overflow-scrolling: touch;
+          }
+          .home-filter-scroll--open {
+            overflow: visible;
           }
           .home-filter-scroll::-webkit-scrollbar { display: none; }
         }
@@ -772,12 +780,7 @@ export default function HomePage() {
           background: 'linear-gradient(160deg, #fff8f8 0%, #fff 40%, #f8f8ff 100%)',
         }}
       >
-        <Navbar
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          isMobile={isMobile}
-          onSearchClick={() => heroSearchRef.current?.focus()}
-        />
+        <Navbar activeTab={activeTab} setActiveTab={setActiveTab} isMobile={isMobile} />
 
         <section
           ref={heroRef}
@@ -905,10 +908,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        <div ref={filterDropdownRef}>
+        <div>
           {filterSticky && <div style={{ height: filterBarHeight }} aria-hidden />}
 
           <div
+            ref={filterDropdownRef}
             style={{
               padding: isMobile ? '0 12px 16px' : '0 32px 24px',
               ...(filterSticky
@@ -917,19 +921,28 @@ export default function HomePage() {
                     top: 64,
                     left: 0,
                     right: 0,
-                    zIndex: 999,
-                    background: 'rgba(255,255,255,0.95)',
-                    backdropFilter: 'blur(20px)',
-                    WebkitBackdropFilter: 'blur(20px)',
-                    borderBottom: '1px solid rgba(249,62,66,0.08)',
-                    boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+                    zIndex: openDropdown ? 10001 : 999,
+                    background: openDropdown ? 'transparent' : 'rgba(255,255,255,0.95)',
+                    backdropFilter: openDropdown ? 'none' : 'blur(20px)',
+                    WebkitBackdropFilter: openDropdown ? 'none' : 'blur(20px)',
+                    borderBottom: openDropdown
+                      ? 'none'
+                      : '1px solid rgba(249,62,66,0.08)',
+                    boxShadow: openDropdown ? 'none' : '0 4px 24px rgba(0,0,0,0.06)',
                     padding: isMobile ? '12px' : '16px 32px',
                     transition: 'all 0.3s ease',
                   }
                 : { transition: 'all 0.3s ease' }),
             }}
           >
-            <div className={isMobile ? 'home-filter-scroll' : undefined} style={{ display: isMobile ? 'flex' : 'block' }}>
+            <div
+              className={
+                isMobile
+                  ? `home-filter-scroll${openDropdown ? ' home-filter-scroll--open' : ''}`
+                  : undefined
+              }
+              style={{ display: isMobile ? 'flex' : 'block', overflow: openDropdown ? 'visible' : undefined }}
+            >
               {filterBarInner}
             </div>
           </div>
