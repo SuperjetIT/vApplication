@@ -69,7 +69,6 @@
 }
 
 .locale-picker {
-  justify-self: end;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -80,6 +79,28 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
+}
+
+.header-actions {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.signin-link {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.signin-link:hover {
+  border-color: var(--border-strong);
 }
 
 .locale-picker img {
@@ -227,6 +248,10 @@
 
 @media (max-width: 900px) {
   .site-header__inner .header-tabs {
+    display: none;
+  }
+
+  .signin-link {
     display: none;
   }
 

@@ -27,11 +27,16 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
             </button>
           </nav>
 
-          <button type="button" className="locale-picker" aria-label="United Arab Emirates">
-            <img src={flagUrl('ae', 40)} alt="" width={24} height={16} />
-            <span>AE</span>
-            <ChevronIcon />
-          </button>
+          <div className="header-actions">
+            <button type="button" className="locale-picker" aria-label="United Arab Emirates">
+              <img src={flagUrl('ae', 40)} alt="" width={24} height={16} />
+              <span>AE</span>
+              <ChevronIcon />
+            </button>
+            <Link to="/sign-in" className="signin-link">
+              Sign In
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -90,10 +95,10 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
           <HomeIcon />
           Home
         </Link>
-        <a href="#profile" className="mobile-nav__item">
+        <Link to="/sign-in" className="mobile-nav__item">
           <ProfileIcon />
           My Profile
-        </a>
+        </Link>
       </nav>
     </div>
   )
