@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
+import { useCitizenship } from '../context/CitizenshipContext'
+import { getCitizenshipByCode } from '../data/citizenships'
 import {
   countries,
   getProcessingDays,
@@ -328,11 +330,32 @@ function CalendarPopup({
   )
 }
 
+function countryCardNameFontSize(name: string, isMobile: boolean): number {
+  const len = name.length
+  if (isMobile) {
+    if (len > 22) return 8
+    if (len > 16) return 9
+    return 11
+  }
+  if (len > 24) return 9
+  if (len > 18) return 10
+  return 12
+}
+
+function countryCardNameBottom(name: string, isMobile: boolean): number {
+  const barHeight = isMobile ? 44 : 48
+  const gap = 10
+  const extraLines = name.length > 22 ? 12 : name.length > 16 ? 6 : 0
+  return barHeight + gap + extraLines
+}
+
 function CountryCard({ country, isMobile }: { country: Country; isMobile: boolean }) {
   const [hovered, setHovered] = useState(false)
   const displayType =
     country.visaType === 'No Visa Required' ? 'No Visa Required' : country.visaType
   const cardHeight = isMobile ? 260 : 320
+  const bottomBarHeight = isMobile ? 44 : 48
+  const nameBottom = countryCardNameBottom(country.name, isMobile)
 
   return (
     <Link
@@ -364,7 +387,7 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
             position: 'absolute',
             inset: 0,
             background:
-              'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.3) 30%, rgba(0,0,0,0) 100%)',
+              'linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.4) 18%, rgba(0,0,0,0.12) 42%, transparent 68%)',
           }}
         />
 
@@ -373,12 +396,13 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
             position: 'absolute',
             left: 0,
             right: 0,
-            top: '50%',
+            top: isMobile ? '42%' : '44%',
             transform: 'translateY(-50%)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             pointerEvents: 'none',
+            zIndex: 1,
           }}
         >
           <img
@@ -399,15 +423,22 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
             position: 'absolute',
             left: 0,
             right: 0,
-            bottom: 52,
+            bottom: nameBottom,
             margin: 0,
             textAlign: 'center',
-            fontSize: isMobile ? 11 : 12,
+            fontSize: countryCardNameFontSize(country.name, isMobile),
             fontWeight: 700,
-            letterSpacing: '0.08em',
+            letterSpacing: country.name.length > 18 ? '0.04em' : '0.08em',
+            lineHeight: 1.35,
             color: '#fff',
             textTransform: 'uppercase',
-            padding: '0 12px',
+            padding: '0 10px',
+            whiteSpace: 'normal',
+            wordBreak: 'break-word',
+            overflowWrap: 'break-word',
+            textShadow: '0 1px 6px rgba(0,0,0,0.65)',
+            zIndex: 2,
+            pointerEvents: 'none',
           }}
         >
           {country.name}
@@ -419,13 +450,17 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
             left: 0,
             right: 0,
             bottom: 0,
+            height: bottomBarHeight,
+            boxSizing: 'border-box',
             background: 'rgba(0,0,0,0.55)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
             display: 'grid',
             gridTemplateColumns: '1fr 1fr 1fr',
             gap: 4,
-            padding: '10px 8px',
+            padding: '6px 6px',
+            alignItems: 'center',
+            zIndex: 1,
             transform: hovered ? 'translateY(100%)' : 'translateY(0)',
             opacity: hovered ? 0 : 1,
             transition: 'transform 0.3s ease, opacity 0.3s ease',
@@ -436,9 +471,21 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
             { label: 'VALID', value: country.validity },
             { label: 'FEES', value: country.fee },
           ].map((item) => (
-            <div key={item.label} style={{ textAlign: 'center' }}>
+            <div key={item.label} style={{ textAlign: 'center', minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: 8, color: '#9ca3af', letterSpacing: '0.05em' }}>{item.label}</p>
-              <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 700, color: '#fff' }}>{item.value}</p>
+              <p
+                style={{
+                  margin: '2px 0 0',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: '#fff',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {item.value}
+              </p>
             </div>
           ))}
         </div>
@@ -450,6 +497,7 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
             right: 0,
             bottom: 0,
             padding: 14,
+            zIndex: 3,
             background: 'rgba(15,15,25,0.88)',
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
@@ -499,8 +547,18 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
   )
 }
 
+type IpToast = { detectedCountry: string; detectedCode: string }
+
 export default function HomePage() {
   const { isLoggedIn, avatarInitials, avatarColor } = useAuth()
+  const {
+    countryCode,
+    hasSavedCitizenship,
+    setCitizenship,
+    openCitizenshipModal,
+    setDetectedCountryHint,
+  } = useCitizenship()
+  const [ipToast, setIpToast] = useState<IpToast | null>(null)
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<'explore' | 'events'>('explore')
   const [openDropdown, setOpenDropdown] = useState<OpenDropdown>(null)
@@ -521,6 +579,58 @@ export default function HomePage() {
     const handler = () => setIsMobile(window.innerWidth <= 768)
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    let modalTimer: ReturnType<typeof setTimeout> | undefined
+    let toastTimer: ReturnType<typeof setTimeout> | undefined
+
+    async function detectLocation() {
+      try {
+        const res = await fetch('https://ipapi.co/json/')
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as { country_name?: string; country_code?: string }
+        const detectedCountry = data.country_name?.trim()
+        const detectedCode = data.country_code?.trim().toLowerCase()
+        if (!detectedCountry || !detectedCode || cancelled) return
+
+        const savedRaw = localStorage.getItem('user_citizenship')
+        if (!savedRaw) {
+          setDetectedCountryHint(detectedCountry)
+          modalTimer = window.setTimeout(() => {
+            if (!cancelled) openCitizenshipModal()
+          }, 1000)
+          return
+        }
+
+        let savedCode = countryCode
+        try {
+          const parsed = JSON.parse(savedRaw) as { countryCode?: string }
+          if (parsed.countryCode) savedCode = parsed.countryCode.toLowerCase()
+        } catch {
+          /* ignore */
+        }
+
+        if (detectedCode !== savedCode) {
+          setIpToast({ detectedCountry, detectedCode })
+          toastTimer = window.setTimeout(() => {
+            if (!cancelled) setIpToast(null)
+          }, 8000)
+        }
+      } catch {
+        /* ignore network errors */
+      }
+    }
+
+    detectLocation()
+
+    return () => {
+      cancelled = true
+      if (modalTimer) window.clearTimeout(modalTimer)
+      if (toastTimer) window.clearTimeout(toastTimer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run IP detection once on mount
   }, [])
 
   useEffect(() => {
@@ -997,6 +1107,72 @@ export default function HomePage() {
           )}
         </main>
       </div>
+
+      {ipToast && hasSavedCitizenship && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
+            background: '#fff',
+            borderRadius: 40,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+            padding: '14px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+            maxWidth: 'calc(100% - 32px)',
+          }}
+        >
+          <span style={{ fontSize: 14, color: '#333' }}>
+            📍 Browsing from {ipToast.detectedCountry}. Is that your citizenship?
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              const entry =
+                getCitizenshipByCode(ipToast.detectedCode) ??
+                ({ name: ipToast.detectedCountry, code: ipToast.detectedCode } as const)
+              setCitizenship(entry.name, entry.code)
+              setIpToast(null)
+            }}
+            style={{
+              border: 'none',
+              borderRadius: 40,
+              background: BRAND,
+              color: '#fff',
+              padding: '6px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIpToast(null)
+              openCitizenshipModal()
+            }}
+            style={{
+              border: '1px solid #eee',
+              borderRadius: 40,
+              background: '#fff',
+              color: '#333',
+              padding: '6px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Change
+          </button>
+        </div>
+      )}
     </>
   )
 }

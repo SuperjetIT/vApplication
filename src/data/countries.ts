@@ -10,6 +10,18 @@ export type DocumentCategory =
 
 export type TypeFilter = 'visa-free' | 'visa-on-arrival' | 'e-visa' | 'sticker'
 
+export interface VisaOption {
+  id: string
+  label: string
+  validity: string
+  fee: string
+  processingFee: string
+  processingTime: string
+  entry: string
+  method: string
+  ports: string
+}
+
 export interface Country {
   slug: string
   name: string
@@ -24,6 +36,62 @@ export interface Country {
   processingCategory: ProcessingCategory
   documentCategory: DocumentCategory
   typeFilter: TypeFilter
+  visaOptions: VisaOption[]
+}
+
+const PROCESSING_FEE = 'AED 173'
+const ALL_PORTS = 'All Ports of Entry'
+const PAPERLESS = 'Paperless'
+
+function singleOption(
+  validity: string,
+  fee: string,
+  processingTime: string,
+  label = 'Single Entry Visa',
+): VisaOption[] {
+  return [
+    {
+      id: 'single',
+      label,
+      validity,
+      fee,
+      processingFee: fee === 'Free' ? 'Free' : PROCESSING_FEE,
+      processingTime,
+      entry: 'Single',
+      method: PAPERLESS,
+      ports: ALL_PORTS,
+    },
+  ]
+}
+
+function dualOptions(
+  single: { validity: string; fee: string; processingTime: string },
+  multiple: { validity: string; fee: string; processingTime: string },
+): VisaOption[] {
+  return [
+    {
+      id: 'single',
+      label: 'Single Entry Visa',
+      validity: single.validity,
+      fee: single.fee,
+      processingFee: PROCESSING_FEE,
+      processingTime: single.processingTime,
+      entry: 'Single',
+      method: PAPERLESS,
+      ports: ALL_PORTS,
+    },
+    {
+      id: 'multiple',
+      label: 'Multiple Entry Visa',
+      validity: multiple.validity,
+      fee: multiple.fee,
+      processingFee: PROCESSING_FEE,
+      processingTime: multiple.processingTime,
+      entry: 'Multiple',
+      method: PAPERLESS,
+      ports: ALL_PORTS,
+    },
+  ]
 }
 
 export const countries: Country[] = [
@@ -41,6 +109,10 @@ export const countries: Country[] = [
     processingCategory: '3-5days',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: dualOptions(
+      { validity: '30 days', fee: 'AED 185', processingTime: '3-5 days' },
+      { validity: '1 year', fee: 'AED 320', processingTime: '5-7 days' },
+    ),
   },
   {
     slug: 'uk',
@@ -56,6 +128,10 @@ export const countries: Country[] = [
     processingCategory: '8-30days',
     documentCategory: 'passport-bank',
     typeFilter: 'e-visa',
+    visaOptions: dualOptions(
+      { validity: '6 months', fee: 'AED 650', processingTime: '10-15 days' },
+      { validity: '2 years', fee: 'AED 890', processingTime: '12-18 days' },
+    ),
   },
   {
     slug: 'kenya',
@@ -71,6 +147,10 @@ export const countries: Country[] = [
     processingCategory: 'instant',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: dualOptions(
+      { validity: '30 days', fee: 'AED 220', processingTime: '2-4 days' },
+      { validity: '90 days', fee: 'AED 310', processingTime: '3-5 days' },
+    ),
   },
   {
     slug: 'united-states',
@@ -86,6 +166,10 @@ export const countries: Country[] = [
     processingCategory: '8-30days',
     documentCategory: 'us-uk-schengen',
     typeFilter: 'sticker',
+    visaOptions: dualOptions(
+      { validity: '10 years', fee: 'AED 720', processingTime: '15-30 days' },
+      { validity: '10 years', fee: 'AED 820', processingTime: '12-25 days' },
+    ),
   },
   {
     slug: 'malaysia',
@@ -101,6 +185,10 @@ export const countries: Country[] = [
     processingCategory: '24hours',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: dualOptions(
+      { validity: '30 days', fee: 'AED 150', processingTime: '2-3 days' },
+      { validity: '90 days', fee: 'AED 240', processingTime: '3-5 days' },
+    ),
   },
   {
     slug: 'egypt',
@@ -116,6 +204,10 @@ export const countries: Country[] = [
     processingCategory: '3-5days',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: dualOptions(
+      { validity: '30 days', fee: 'AED 114', processingTime: '3-5 days' },
+      { validity: '90 days', fee: 'AED 220', processingTime: '5-7 days' },
+    ),
   },
   {
     slug: 'indonesia',
@@ -131,6 +223,7 @@ export const countries: Country[] = [
     processingCategory: '3-5days',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: singleOption('90 days', 'AED 190', '3-5 days'),
   },
   {
     slug: 'thailand',
@@ -146,6 +239,10 @@ export const countries: Country[] = [
     processingCategory: '24hours',
     documentCategory: 'passport-only',
     typeFilter: 'visa-on-arrival',
+    visaOptions: dualOptions(
+      { validity: '30 days', fee: 'AED 210', processingTime: '4-6 days' },
+      { validity: '90 days', fee: 'AED 295', processingTime: '5-7 days' },
+    ),
   },
   {
     slug: 'vietnam',
@@ -161,6 +258,7 @@ export const countries: Country[] = [
     processingCategory: '3-5days',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: singleOption('30 days', 'AED 165', '3-5 days'),
   },
   {
     slug: 'canada',
@@ -176,6 +274,10 @@ export const countries: Country[] = [
     processingCategory: '8-30days',
     documentCategory: 'passport-bank',
     typeFilter: 'sticker',
+    visaOptions: dualOptions(
+      { validity: '6 months', fee: 'AED 580', processingTime: '20-30 days' },
+      { validity: '5 years', fee: 'AED 720', processingTime: '18-28 days' },
+    ),
   },
   {
     slug: 'australia',
@@ -191,6 +293,10 @@ export const countries: Country[] = [
     processingCategory: '6-7days',
     documentCategory: 'passport-emirates',
     typeFilter: 'e-visa',
+    visaOptions: dualOptions(
+      { validity: '3 months', fee: 'AED 490', processingTime: '10-15 days' },
+      { validity: '1 year', fee: 'AED 620', processingTime: '12-18 days' },
+    ),
   },
   {
     slug: 'saudi-arabia',
@@ -206,6 +312,7 @@ export const countries: Country[] = [
     processingCategory: '24hours',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: singleOption('365 days', 'AED 320', '2-4 days'),
   },
   {
     slug: 'singapore',
@@ -221,6 +328,10 @@ export const countries: Country[] = [
     processingCategory: '3-5days',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: dualOptions(
+      { validity: '30 days', fee: 'AED 140', processingTime: '3-5 days' },
+      { validity: '90 days', fee: 'AED 225', processingTime: '5-7 days' },
+    ),
   },
   {
     slug: 'brazil',
@@ -236,6 +347,7 @@ export const countries: Country[] = [
     processingCategory: '6-7days',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: singleOption('10 years', 'AED 260', '7-10 days'),
   },
   {
     slug: 'south-korea',
@@ -251,6 +363,7 @@ export const countries: Country[] = [
     processingCategory: '6-7days',
     documentCategory: 'passport-only',
     typeFilter: 'e-visa',
+    visaOptions: singleOption('2 years', 'AED 380', '8-12 days'),
   },
   {
     slug: 'japan',
@@ -266,6 +379,7 @@ export const countries: Country[] = [
     processingCategory: 'instant',
     documentCategory: 'passport-only',
     typeFilter: 'visa-free',
+    visaOptions: singleOption('90 days', 'Free', 'Instant', 'Visa Free Entry'),
   },
   {
     slug: 'france',
@@ -281,6 +395,10 @@ export const countries: Country[] = [
     processingCategory: 'instant',
     documentCategory: 'passport-only',
     typeFilter: 'visa-free',
+    visaOptions: dualOptions(
+      { validity: '90 days', fee: 'AED 350', processingTime: '8-12 days' },
+      { validity: '2 years', fee: 'AED 520', processingTime: '10-15 days' },
+    ),
   },
   {
     slug: 'uae',
@@ -296,6 +414,10 @@ export const countries: Country[] = [
     processingCategory: 'instant',
     documentCategory: 'passport-only',
     typeFilter: 'visa-free',
+    visaOptions: dualOptions(
+      { validity: '30 days', fee: 'AED 280', processingTime: '2-4 days' },
+      { validity: '90 days', fee: 'AED 420', processingTime: '3-5 days' },
+    ),
   },
 ]
 

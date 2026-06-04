@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
+import { useCitizenship } from '../context/CitizenshipContext'
+import { flagUrl } from '../utils/flags'
 
 const BRAND = '#f93e42'
 
@@ -98,6 +100,7 @@ export function Navbar({
   showTabs?: boolean
   showEvents?: boolean
 }) {
+  const { countryCode, citizenship, openCitizenshipModal } = useCitizenship()
   const tabsVisible = showTabs && !isMobile
   const tabStyle = (active: boolean): CSSProperties => ({
     display: 'inline-flex',
@@ -184,6 +187,25 @@ export function Navbar({
           gap: 10,
         }}
       >
+        <button
+          type="button"
+          onClick={openCitizenshipModal}
+          style={{
+            ...iconCircle,
+            overflow: 'hidden',
+          }}
+          aria-label={`Citizenship: ${citizenship}`}
+          title={`Citizenship: ${citizenship}`}
+        >
+          <img
+            src={flagUrl(countryCode, 40)}
+            alt=""
+            width={24}
+            height={18}
+            style={{ borderRadius: '50%', objectFit: 'cover', width: 24, height: 24 }}
+          />
+        </button>
+
         <a
           href="https://wa.me/971559641020"
           target="_blank"

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { countries, getCountry, type Country } from '../data/countries'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { countries, getCountry, type Country, type VisaOption } from '../data/countries'
 import { useAuth } from '../context/AuthContext'
+import { useCitizenship } from '../context/CitizenshipContext'
+import { flagUrl } from '../utils/flags'
 import { createApplication } from '../utils/applications'
 import { SiteLayout } from '../components/SiteLayout'
 
@@ -11,7 +13,8 @@ const TEXT = '#111827'
 const TEXT_MUTED = '#6b7280'
 const BORDER = '#e5e7eb'
 const MAX_W = 1280
-const PROCESSING_FEE = 99
+const EXPRESS_SURCHARGE = 50
+const DELIVERY_ACCENT = '#5057ea'
 
 const nearbyBySlug: Record<string, string[]> = {
   singapore: ['malaysia', 'indonesia', 'thailand', 'vietnam'],
@@ -67,6 +70,39 @@ function parseFeeAed(fee: string): number {
   return match ? Number.parseInt(match[1], 10) : 0
 }
 
+function parseProcessingDaysMax(processingTime: string): number {
+  if (processingTime === 'Instant' || processingTime === 'Not applicable') return 0
+  const nums = processingTime.match(/\d+/g)?.map((n) => Number.parseInt(n, 10)) ?? [5]
+  return nums[nums.length - 1] ?? 5
+}
+
+function parseProcessingDaysMin(processingTime: string): number {
+  if (processingTime === 'Instant' || processingTime === 'Not applicable') return 0
+  const nums = processingTime.match(/\d+/g)?.map((n) => Number.parseInt(n, 10)) ?? [3]
+  return nums[0] ?? 3
+}
+
+function formatDeliveryDate(daysFromNow: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + daysFromNow)
+  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return `${date} at ${time}`
+}
+
+function getValidityDisplay(option: VisaOption, country: Country): string {
+  if (country.visaType === 'Sticker') return option.validity
+  if (option.validity.includes('year') || option.validity === '365 days') return option.validity
+  return 'From date of issue'
+}
+
+function getOptionButtonLabel(option: VisaOption, countryName: string): string {
+  if (option.id === 'multiple' || option.entry === 'Multiple') {
+    return `I want a Multi-entry ${countryName} visa`
+  }
+  return `I want a ${option.label} for ${countryName}`
+}
+
 function getNearby(slug: string): Country[] {
   const slugs = nearbyBySlug[slug]
   if (slugs) {
@@ -78,21 +114,9 @@ function getNearby(slug: string): Country[] {
   return countries.filter((c) => c.slug !== slug).slice(0, 4)
 }
 
-function getEntryType(visaType: string): string {
-  if (visaType === 'Sticker') return 'Multiple'
-  if (visaType === 'No Visa Required') return 'Visa Free'
-  return 'Single'
-}
-
 function getLengthOfStay(validity: string): string {
   if (validity === 'N/A' || validity === 'Not applicable') return '—'
   return validity
-}
-
-function getValidityLabel(country: Country): string {
-  if (country.visaType === 'Sticker') return country.validity
-  if (country.validity.includes('year')) return country.validity
-  return 'From date of issue'
 }
 
 function SectionAccent() {
@@ -341,11 +365,202 @@ function InfoPill({
   )
 }
 
+function GuaranteedDeliverySection({
+  selectedOption,
+  deliveryTier,
+  setDeliveryTier,
+  isMobile,
+}: {
+  selectedOption: VisaOption
+  deliveryTier: 'standard' | 'express'
+  setDeliveryTier: (tier: 'standard' | 'express') => void
+  isMobile: boolean
+}) {
+  const maxDays = parseProcessingDaysMax(selectedOption.processingTime)
+  const minDays = parseProcessingDaysMin(selectedOption.processingTime)
+  const standardDate = formatDeliveryDate(maxDays)
+  const expressDate = formatDeliveryDate(Math.max(0, minDays - 1))
+  const hoursSooner = Math.max(24, (maxDays - Math.max(0, minDays - 1)) * 24)
+  const inDaysLabel =
+    maxDays === 0 ? 'Instant' : maxDays === minDays ? `in ${maxDays} days` : `in ${minDays}-${maxDays} days`
+
+  const cardBase: CSSProperties = {
+    borderRadius: 16,
+    border: '1px solid #eee',
+    padding: 16,
+    marginBottom: 12,
+    display: 'flex',
+    flexDirection: isMobile ? 'column' : 'row',
+    alignItems: isMobile ? 'stretch' : 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  }
+
+  return (
+    <section style={{ paddingBottom: 32, marginBottom: 32, borderBottom: `1px solid ${BORDER}` }}>
+      <SectionTitle>Get a Guaranteed Visa</SectionTitle>
+      <SectionAccent />
+      <div
+        style={{
+          ...cardBase,
+          border: deliveryTier === 'standard' ? `2px solid ${DELIVERY_ACCENT}` : '1px solid #eee',
+          background: deliveryTier === 'standard' ? '#fafbff' : '#fff',
+        }}
+      >
+        <div>
+          <span
+            style={{
+              display: 'inline-block',
+              fontSize: 11,
+              fontWeight: 600,
+              color: DELIVERY_ACCENT,
+              background: '#eef0ff',
+              padding: '4px 10px',
+              borderRadius: 20,
+              marginBottom: 10,
+            }}
+          >
+            {inDaysLabel}
+          </span>
+          <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 15, color: TEXT }}>{standardDate}</p>
+          <button
+            type="button"
+            style={{
+              border: 'none',
+              background: 'none',
+              padding: 0,
+              fontSize: 13,
+              color: TEXT_MUTED,
+              cursor: 'pointer',
+            }}
+          >
+            View Timeline ↓
+          </button>
+        </div>
+        {deliveryTier === 'standard' ? (
+          <button
+            type="button"
+            style={{
+              alignSelf: isMobile ? 'flex-start' : 'center',
+              border: 'none',
+              borderRadius: 20,
+              background: '#dcfce7',
+              color: '#15803d',
+              fontSize: 12,
+              fontWeight: 700,
+              padding: '8px 16px',
+              cursor: 'default',
+            }}
+          >
+            ✓ Selected
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setDeliveryTier('standard')}
+            style={{
+              alignSelf: isMobile ? 'flex-start' : 'center',
+              border: `1px solid ${BORDER}`,
+              borderRadius: 20,
+              background: '#fff',
+              color: TEXT,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: '8px 16px',
+              cursor: 'pointer',
+            }}
+          >
+            Select
+          </button>
+        )}
+      </div>
+      <div
+        style={{
+          ...cardBase,
+          marginBottom: 0,
+          border: deliveryTier === 'express' ? `2px solid ${DELIVERY_ACCENT}` : '1px solid #eee',
+          background: deliveryTier === 'express' ? '#fafbff' : '#fff',
+        }}
+      >
+        <div>
+          <span
+            style={{
+              display: 'inline-block',
+              fontSize: 11,
+              fontWeight: 600,
+              color: TEXT_MUTED,
+              background: '#f3f4f6',
+              padding: '4px 10px',
+              borderRadius: 20,
+              marginBottom: 10,
+            }}
+          >
+            {hoursSooner} hours sooner
+          </span>
+          <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 15, color: TEXT }}>{expressDate}</p>
+          <button
+            type="button"
+            style={{
+              border: 'none',
+              background: 'none',
+              padding: 0,
+              fontSize: 13,
+              color: TEXT_MUTED,
+              cursor: 'pointer',
+            }}
+          >
+            View Timeline ↓
+          </button>
+        </div>
+        {deliveryTier === 'express' ? (
+          <button
+            type="button"
+            style={{
+              alignSelf: isMobile ? 'flex-start' : 'center',
+              border: 'none',
+              borderRadius: 20,
+              background: '#dcfce7',
+              color: '#15803d',
+              fontSize: 12,
+              fontWeight: 700,
+              padding: '8px 16px',
+              cursor: 'default',
+            }}
+          >
+            ✓ Selected
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setDeliveryTier('express')}
+            style={{
+              alignSelf: isMobile ? 'flex-start' : 'center',
+              border: `1px solid ${BORDER}`,
+              borderRadius: 20,
+              background: '#fff',
+              color: TEXT,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: '8px 16px',
+              cursor: 'pointer',
+            }}
+          >
+            Select
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function PaymentSidebar({
   country,
+  selectedOption,
+  selectedOptionId,
+  setSearchParams,
   travelers,
   setTravelers,
-  govFee,
+  expressExtra,
   total,
   isMobile,
   applyHover,
@@ -353,9 +568,12 @@ function PaymentSidebar({
   onApply,
 }: {
   country: Country
+  selectedOption: VisaOption
+  selectedOptionId: string
+  setSearchParams: ReturnType<typeof useSearchParams>[1]
   travelers: number
   setTravelers: (n: number) => void
-  govFee: number
+  expressExtra: number
   total: number
   isMobile: boolean
   applyHover: boolean
@@ -365,6 +583,7 @@ function PaymentSidebar({
   const stickyWrap: CSSProperties = isMobile
     ? {}
     : { position: 'sticky', top: 80, alignSelf: 'flex-start' }
+  const hasMultipleOptions = country.visaOptions.length > 1
 
   return (
     <div style={{ ...stickyWrap, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -392,6 +611,64 @@ function PaymentSidebar({
           <span style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', lineHeight: 1.4 }}>
             Visa Guaranteed on {country.guaranteedDate}
           </span>
+        </div>
+
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <p style={{ margin: 0, fontSize: 32, fontWeight: 700, color: TEXT }}>{selectedOption.fee}</p>
+          <p
+            style={{
+              margin: '6px 0 0',
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              color: TEXT_MUTED,
+              textTransform: 'uppercase',
+            }}
+          >
+            TO BE PAID NOW
+          </p>
+        </div>
+
+        <div style={{ fontSize: 14, color: TEXT_MUTED, marginBottom: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: 12,
+            }}
+          >
+            <div>
+              <span style={{ fontWeight: 600, color: TEXT }}>Pay Now</span>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: TEXT_MUTED }}>Government Fees</p>
+            </div>
+            <span style={{ color: TEXT, fontWeight: 700 }}>{selectedOption.fee}</span>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+            }}
+          >
+            <div>
+              <span style={{ fontWeight: 600, color: TEXT }}>Pay on approval</span>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: TEXT_MUTED }}>Processing Fee</p>
+            </div>
+            <span style={{ color: TEXT, fontWeight: 700 }}>{selectedOption.processingFee}</span>
+          </div>
+          {expressExtra > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: 12,
+              }}
+            >
+              <span>Express delivery</span>
+              <span style={{ color: TEXT, fontWeight: 500 }}>AED {expressExtra}</span>
+            </div>
+          )}
         </div>
 
         <div
@@ -429,26 +706,11 @@ function PaymentSidebar({
           </div>
         </div>
 
-        <div style={{ fontSize: 14, color: TEXT_MUTED, marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span>Government Fees</span>
-            <span style={{ color: TEXT, fontWeight: 500 }}>
-              AED {govFee * travelers}
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Processing Fee</span>
-            <span style={{ color: TEXT, fontWeight: 500 }}>
-              AED {PROCESSING_FEE * travelers}
-            </span>
-          </div>
-        </div>
-
         <div
           style={{
             borderTop: `1px solid ${BORDER}`,
             paddingTop: 14,
-            marginBottom: 20,
+            marginBottom: hasMultipleOptions ? 16 : 20,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -457,6 +719,34 @@ function PaymentSidebar({
           <span style={{ fontWeight: 700, fontSize: 15, color: TEXT }}>Total Amount</span>
           <span style={{ fontWeight: 700, fontSize: 18, color: BRAND }}>AED {total}</span>
         </div>
+
+        {hasMultipleOptions && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+            {country.visaOptions.map((option) => {
+              const selected = option.id === selectedOptionId
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setSearchParams({ option: option.id }, { replace: true })}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    borderRadius: 40,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    background: selected ? BRAND : '#fff',
+                    color: selected ? '#fff' : '#333',
+                    border: selected ? 'none' : '1px solid #ddd',
+                  }}
+                >
+                  {getOptionButtonLabel(option, country.name)}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         <button
           type="button"
@@ -552,11 +842,15 @@ export default function VisaPage() {
   const { countrySlug } = useParams<{ countrySlug: string }>()
   const country = countrySlug ? getCountry(countrySlug) : undefined
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user, isLoggedIn } = useAuth()
+  const { citizenship, countryCode } = useCitizenship()
+  const [passportCitizenship, setPassportCitizenship] = useState(citizenship)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const [travelers, setTravelers] = useState(1)
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [applyHover, setApplyHover] = useState(false)
+  const [deliveryTier, setDeliveryTier] = useState<'standard' | 'express'>('standard')
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768)
@@ -564,13 +858,39 @@ export default function VisaPage() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
+  useEffect(() => {
+    setPassportCitizenship(citizenship)
+  }, [citizenship, countryCode])
+
+  const selectedOption = useMemo(() => {
+    if (!country) return undefined
+    const param = searchParams.get('option')
+    return country.visaOptions.find((o) => o.id === param) ?? country.visaOptions[0]
+  }, [country, searchParams])
+
+  const selectedOptionId = selectedOption?.id ?? 'single'
+
+  useEffect(() => {
+    if (!country) return
+    const param = searchParams.get('option')
+    if (!param || !country.visaOptions.some((o) => o.id === param)) {
+      setSearchParams({ option: country.visaOptions[0].id }, { replace: true })
+    }
+  }, [country, searchParams, setSearchParams])
+
+  useEffect(() => {
+    setDeliveryTier('standard')
+  }, [selectedOptionId])
+
   const nearby = useMemo(
     () => (country ? getNearby(country.slug) : []),
     [country],
   )
 
-  const govFee = country ? parseFeeAed(country.fee) : 0
-  const total = (govFee + PROCESSING_FEE) * travelers
+  const govFee = selectedOption ? parseFeeAed(selectedOption.fee) : 0
+  const processingFeeNum = selectedOption ? parseFeeAed(selectedOption.processingFee) : 0
+  const expressExtra = deliveryTier === 'express' ? EXPRESS_SURCHARGE : 0
+  const total = (govFee + processingFeeNum + expressExtra) * travelers
 
   const faqs = useMemo(() => {
     if (!country) return []
@@ -585,7 +905,7 @@ export default function VisaPage() {
       },
       {
         q: 'How long does processing take?',
-        a: `Standard processing for ${country.name} is ${country.processingTime}. We guarantee delivery by ${country.guaranteedDate}.`,
+        a: `Standard processing for ${country.name} is ${selectedOption?.processingTime ?? country.processingTime}. We guarantee delivery by ${country.guaranteedDate}.`,
       },
       {
         q: 'Can I track my application?',
@@ -600,7 +920,7 @@ export default function VisaPage() {
         a: 'All payments are encrypted and processed through secure payment partners. We never store full card details.',
       },
     ]
-  }, [country])
+  }, [country, selectedOption])
 
   const steps = [
     { num: 1, title: 'Fill Application', desc: 'Complete your details online in minutes.', icon: <EditIcon /> },
@@ -638,11 +958,18 @@ export default function VisaPage() {
     )
   }
 
+  if (!selectedOption) {
+    return null
+  }
+
   const paymentProps = {
     country,
+    selectedOption,
+    selectedOptionId,
+    setSearchParams,
     travelers,
     setTravelers,
-    govFee,
+    expressExtra,
     total,
     isMobile,
     applyHover,
@@ -787,16 +1114,71 @@ export default function VisaPage() {
             )}
 
             <div style={{ flex: isMobile ? '1 1 100%' : '0 0 70%', maxWidth: isMobile ? '100%' : '70%', width: '100%' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  marginBottom: 24,
+                  padding: '14px 18px',
+                  background: '#f9fafb',
+                  borderRadius: 12,
+                  border: `1px solid ${BORDER}`,
+                }}
+              >
+                <span style={{ fontSize: 14, color: TEXT_MUTED, fontWeight: 500 }}>
+                  Passport citizenship
+                </span>
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    border: '1.5px solid #5057ea',
+                    borderRadius: 40,
+                    padding: '8px 16px',
+                    background: '#fff',
+                  }}
+                >
+                  <img
+                    src={flagUrl(countryCode, 20)}
+                    alt=""
+                    width={20}
+                    height={14}
+                    style={{ borderRadius: 2, objectFit: 'cover' }}
+                  />
+                  <span style={{ fontWeight: 600, fontSize: 14, color: TEXT }}>{passportCitizenship}</span>
+                </div>
+              </div>
+
               <section style={sectionBlock}>
                 <SectionTitle>{`${country.name} Visa Information`}</SectionTitle>
                 <SectionAccent />
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                   <InfoPill icon={<EditIcon />} label="Visa Type" value={country.visaType} />
-                  <InfoPill icon={<UploadIcon />} label="Length of Stay" value={getLengthOfStay(country.validity)} />
-                  <InfoPill icon={<SendIcon />} label="Validity" value={getValidityLabel(country)} />
-                  <InfoPill icon={<CheckIcon />} label="Entry" value={getEntryType(country.visaType)} />
+                  <InfoPill
+                    icon={<UploadIcon />}
+                    label="Length of Stay"
+                    value={getLengthOfStay(selectedOption.validity)}
+                  />
+                  <InfoPill
+                    icon={<SendIcon />}
+                    label="Validity"
+                    value={getValidityDisplay(selectedOption, country)}
+                  />
+                  <InfoPill icon={<CheckIcon />} label="Entry" value={selectedOption.entry} />
+                  <InfoPill icon={<PersonIcon />} label="Visa Accepted At" value={selectedOption.ports} />
+                  <InfoPill icon={<ShieldIcon />} label="Method" value={selectedOption.method} />
                 </div>
               </section>
+
+              <GuaranteedDeliverySection
+                selectedOption={selectedOption}
+                deliveryTier={deliveryTier}
+                setDeliveryTier={setDeliveryTier}
+                isMobile={isMobile}
+              />
 
               <section style={sectionBlock}>
                 <SectionTitle>How Visa Process Works</SectionTitle>
