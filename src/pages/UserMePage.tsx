@@ -1,45 +1,17 @@
-import { useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
-import { getCountry } from '../data/countries'
+import {
+  getApplicationsForUser,
+  getCountryForApplication,
+  type UserApplication,
+} from '../utils/applications'
 import './UserMePage.css'
 
 const BRAND = '#f93e42'
 
 type Section = 'profile' | 'applications' | 'support'
-
-type MockApplication = {
-  id: string
-  countrySlug: string
-  countryName: string
-  countryCode: string
-  status: 'In Progress' | 'Approved' | 'Submitted'
-  appliedOn: string
-  travelers: number
-}
-
-const APPLICATIONS_KEY = 'supervisa_applications'
-
-function loadApplications(email: string): MockApplication[] {
-  try {
-    const raw = localStorage.getItem(`${APPLICATIONS_KEY}_${email}`)
-    if (raw) return JSON.parse(raw) as MockApplication[]
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      id: 'demo-1',
-      countrySlug: 'singapore',
-      countryName: 'Singapore',
-      countryCode: 'sg',
-      status: 'In Progress',
-      appliedOn: '1 Jun 2026',
-      travelers: 1,
-    },
-  ]
-}
 
 function ShieldSmall() {
   return (
@@ -132,13 +104,19 @@ function SidebarNav({
 
 export default function UserMePage() {
   const navigate = useNavigate()
-  const { user, isLoggedIn, logout, displayName, avatarInitials, avatarColor, login } = useAuth()
-  const [activeTab, setActiveTab] = useState<'explore' | 'events'>('explore')
+  const location = useLocation()
+  const { user, isLoggedIn, logout, displayName, avatarInitials, avatarColor, updateProfile } =
+    useAuth()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  const [section, setSection] = useState<Section>('profile')
-  const [name, setName] = useState(displayName)
+  const [section, setSection] = useState<Section>(() => {
+    const fromState = (location.state as { section?: Section } | null)?.section
+    return fromState === 'applications' || fromState === 'support' ? fromState : 'profile'
+  })
+  const [name, setName] = useState(user?.fullName ?? displayName)
+  const [profileError, setProfileError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-  const [applications, setApplications] = useState<MockApplication[]>([])
+  const [applications, setApplications] = useState<UserApplication[]>([])
+  const isLoggingOutRef = useRef(false)
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768)
@@ -147,39 +125,58 @@ export default function UserMePage() {
   }, [])
 
   useEffect(() => {
-    setName(displayName)
-  }, [displayName])
+    setName(user?.fullName ?? displayName)
+  }, [user?.fullName, displayName])
+
+  useEffect(() => {
+    const fromState = (location.state as { section?: Section } | null)?.section
+    if (fromState === 'applications' || fromState === 'support' || fromState === 'profile') {
+      setSection(fromState)
+    }
+  }, [location.state])
 
   useEffect(() => {
     if (user?.email) {
-      setApplications(loadApplications(user.email))
+      setApplications(getApplicationsForUser(user.email))
+    } else {
+      setApplications([])
     }
-  }, [user?.email])
+  }, [user?.email, section])
 
   if (!isLoggedIn || !user) {
+    if (isLoggingOutRef.current) {
+      return <Navigate to="/" replace />
+    }
     return <Navigate to="/sign-in" replace />
   }
 
   const handleLogout = () => {
+    isLoggingOutRef.current = true
     logout()
     navigate('/', { replace: true })
   }
 
-  const handleSaveProfile = () => {
-    login({ email: user.email, name: name.trim() || undefined })
-    setSaved(true)
-    window.setTimeout(() => setSaved(false), 3000)
+  const handleSaveProfile = async () => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setProfileError(null)
+    try {
+      await updateProfile(trimmed)
+      setSaved(true)
+      window.setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Could not save profile.')
+    }
   }
 
   return (
     <div className="user-me-page">
       <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
         isMobile={isMobile}
         isLoggedIn
         avatarInitials={avatarInitials}
         avatarColor={avatarColor}
+        showTabs={false}
       />
 
       <div className="user-me-wrap">
@@ -222,6 +219,11 @@ export default function UserMePage() {
                   {saved && (
                     <div className="user-me-alert" role="status">
                       Profile updated successfully.
+                    </div>
+                  )}
+                  {profileError && (
+                    <div className="user-me-alert user-me-alert--error" role="alert">
+                      {profileError}
                     </div>
                   )}
 
@@ -267,11 +269,11 @@ export default function UserMePage() {
                 {applications.length > 0 ? (
                   <div className="user-me-app-list">
                     {applications.map((app) => {
-                      const country = getCountry(app.countrySlug)
+                      const country = getCountryForApplication(app)
                       return (
                         <Link
                           key={app.id}
-                          to={`/visa/${app.countrySlug}`}
+                          to={`/user/me/applications/${app.id}`}
                           className="user-me-app"
                         >
                           <img
@@ -307,11 +309,13 @@ export default function UserMePage() {
                   </div>
                 )}
 
-                <div style={{ marginTop: 20 }}>
-                  <Link to="/" className="user-me-btn user-me-btn--outline">
-                    Apply for another visa
-                  </Link>
-                </div>
+                {applications.length > 0 && (
+                  <div style={{ marginTop: 20 }}>
+                    <Link to="/" className="user-me-btn user-me-btn--outline">
+                      Apply for another visa
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
 
@@ -336,10 +340,6 @@ export default function UserMePage() {
                   <Link to="/">
                     <span style={{ fontSize: 20 }}>🌍</span>
                     Browse visas
-                  </Link>
-                  <Link to="/visa/schengen">
-                    <span style={{ fontSize: 20 }}>🇪🇺</span>
-                    Schengen visa
                   </Link>
                 </div>
 

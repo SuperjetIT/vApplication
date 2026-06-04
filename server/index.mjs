@@ -1,0 +1,187 @@
+import cors from 'cors'
+import dotenv from 'dotenv'
+import express from 'express'
+import nodemailer from 'nodemailer'
+import { getUserByEmail, upsertUser } from './users.mjs'
+
+dotenv.config()
+
+const PORT = Number(process.env.API_PORT) || 3001
+const OTP_TTL_MS = 10 * 60 * 1000
+
+/** @type {Map<string, { code: string; expires: number }>} */
+const otpStore = new Map()
+
+function generateOtp() {
+  return String(Math.floor(100000 + Math.random() * 900000))
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+function buildOtpEmailHtml(code) {
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f8f8ff;font-family:Inter,Segoe UI,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:40px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 8px 32px rgba(249,62,66,0.12);">
+    <tr>
+      <td style="background:linear-gradient(135deg,#f93e42,#e83539);padding:28px 32px;">
+        <span style="font-style:italic;font-weight:700;font-size:22px;color:#fff;">supervisa</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:32px;">
+        <h1 style="margin:0 0 12px;font-size:22px;color:#111827;">Your sign-in code</h1>
+        <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6;">
+          Use this one-time password to continue. It expires in 10 minutes.
+        </p>
+        <div style="text-align:center;padding:20px;background:#fff8f8;border-radius:16px;border:1.5px solid rgba(249,62,66,0.15);">
+          <span style="font-size:36px;font-weight:700;letter-spacing:8px;color:#f93e42;">${code}</span>
+        </div>
+        <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;">
+          If you didn't request this code, you can safely ignore this email.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}
+
+const app = express()
+app.use(cors({ origin: true }))
+app.use(express.json())
+
+let transporter = null
+
+function getTransporter() {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    return null
+  }
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS.replace(/\s/g, ''),
+      },
+    })
+  }
+  return transporter
+}
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    ok: true,
+    smtpConfigured: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
+  })
+})
+
+app.post('/api/auth/send-otp', async (req, res) => {
+  const email = String(req.body?.email ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' })
+  }
+
+  const mailer = getTransporter()
+  if (!mailer) {
+    return res.status(503).json({
+      error: 'Email service is not configured. Add SMTP settings to .env',
+    })
+  }
+
+  const code = generateOtp()
+  const expires = Date.now() + OTP_TTL_MS
+  otpStore.set(email, { code, expires })
+
+  const from = process.env.SMTP_FROM || `"supervisa" <${process.env.SMTP_USER}>`
+
+  try {
+    await mailer.sendMail({
+      from,
+      to: email,
+      subject: `${code} is your supervisa sign-in code`,
+      text: `Your supervisa verification code is ${code}. It expires in 10 minutes. If you didn't request this, ignore this email.`,
+      html: buildOtpEmailHtml(code),
+    })
+    return res.json({ success: true })
+  } catch (err) {
+    console.error('[send-otp]', err)
+    otpStore.delete(email)
+    return res.status(500).json({
+      error: 'Could not send email. Check SMTP settings and try again.',
+    })
+  }
+})
+
+app.post('/api/auth/verify-otp', (req, res) => {
+  const email = String(req.body?.email ?? '')
+    .trim()
+    .toLowerCase()
+  const code = String(req.body?.code ?? '').trim()
+
+  if (!isValidEmail(email) || code.length !== 6) {
+    return res.status(400).json({ success: false, error: 'Invalid email or code.' })
+  }
+
+  const record = otpStore.get(email)
+  if (!record) {
+    return res.json({ success: false, error: 'No code found. Request a new OTP.' })
+  }
+  if (Date.now() > record.expires) {
+    otpStore.delete(email)
+    return res.json({ success: false, error: 'Code expired. Request a new OTP.' })
+  }
+  if (record.code !== code) {
+    return res.json({ success: false, error: 'Incorrect code. Try again.' })
+  }
+
+  otpStore.delete(email)
+  const user = getUserByEmail(email)
+  return res.json({ success: true, user })
+})
+
+app.get('/api/user/me', (req, res) => {
+  const email = String(req.headers['x-user-email'] ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (!isValidEmail(email)) {
+    return res.status(401).json({ error: 'Authentication required.' })
+  }
+
+  return res.json(getUserByEmail(email))
+})
+
+app.patch('/api/user/me', (req, res) => {
+  const email = String(req.body?.email ?? '')
+    .trim()
+    .toLowerCase()
+  const fullName = String(req.body?.fullName ?? '').trim()
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: 'Invalid email address.' })
+  }
+
+  if (!fullName) {
+    return res.status(400).json({ error: 'Full name is required.' })
+  }
+
+  const user = upsertUser(email, fullName)
+  return res.json(user)
+})
+
+app.listen(PORT, () => {
+  console.log(`[supervisa-api] http://localhost:${PORT}`)
+  if (!process.env.SMTP_USER) {
+    console.warn('[supervisa-api] SMTP_USER missing — copy .env.example to .env')
+  }
+})

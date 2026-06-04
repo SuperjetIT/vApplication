@@ -10,13 +10,11 @@ import {
 import { getAvatarColor, getDisplayName, getInitials } from '../utils/avatar'
 
 const USER_KEY = 'supervisa_user'
-const OTP_KEY = 'supervisa_otp'
 const OTP_EMAIL_KEY = 'supervisa_otp_email'
-const OTP_EXPIRES_KEY = 'supervisa_otp_expires'
 
 export type AuthUser = {
   email: string
-  name?: string
+  fullName?: string
 }
 
 type AuthContextValue = {
@@ -25,90 +23,245 @@ type AuthContextValue = {
   avatarInitials: string
   avatarColor: string
   displayName: string
-  login: (user: AuthUser) => void
+  loginWithEmail: (email: string, verifiedUser?: AuthUser) => Promise<void>
   logout: () => void
-  sendOtp: (email: string) => Promise<string>
-  verifyOtp: (email: string, code: string) => boolean
+  updateProfile: (fullName: string) => Promise<void>
+  refreshUser: () => Promise<void>
+  sendOtp: (email: string) => Promise<void>
+  verifyOtp: (
+    email: string,
+    code: string,
+  ) => Promise<{ ok: boolean; error?: string; user?: AuthUser }>
   getPendingOtpEmail: () => string | null
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+function normalizeStoredUser(raw: unknown): AuthUser | null {
+  if (!raw || typeof raw !== 'object') return null
+  const record = raw as { email?: string; fullName?: string; name?: string }
+  if (!record.email) return null
+  const email = record.email.trim().toLowerCase()
+  const fullName = (record.fullName ?? record.name ?? '').trim()
+  return { email, fullName: fullName || undefined }
+}
+
 function loadUser(): AuthUser | null {
   try {
     const raw = localStorage.getItem(USER_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as AuthUser
-    if (parsed?.email) return parsed
+    return normalizeStoredUser(JSON.parse(raw))
+  } catch {
+    return null
+  }
+}
+
+function persistUser(user: AuthUser | null) {
+  if (user) {
+    localStorage.setItem(
+      USER_KEY,
+      JSON.stringify({
+        email: user.email,
+        fullName: user.fullName ?? '',
+      }),
+    )
+  } else {
+    localStorage.removeItem(USER_KEY)
+  }
+}
+
+function clearAuthStorage() {
+  localStorage.removeItem(USER_KEY)
+  sessionStorage.removeItem(OTP_EMAIL_KEY)
+}
+
+async function parseApiError(res: Response): Promise<string> {
+  try {
+    const data = (await res.json()) as { error?: string }
+    if (data.error) return data.error
   } catch {
     /* ignore */
   }
-  return null
+  return 'Something went wrong. Please try again.'
 }
 
-function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000))
+async function fetchUserMe(email: string): Promise<AuthUser> {
+  const normalized = email.trim().toLowerCase()
+  const res = await fetch('/api/user/me', {
+    headers: { 'X-User-Email': normalized },
+  })
+
+  if (!res.ok) {
+    throw new Error(await parseApiError(res))
+  }
+
+  const data = (await res.json()) as { email: string; fullName?: string }
+  return {
+    email: data.email.trim().toLowerCase(),
+    fullName: (data.fullName ?? '').trim() || undefined,
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => loadUser())
 
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem(USER_KEY, JSON.stringify(user))
-    } else {
-      localStorage.removeItem(USER_KEY)
-    }
-  }, [user])
-
-  const login = useCallback((next: AuthUser) => {
+  const applyUser = useCallback((next: AuthUser | null) => {
     setUser(next)
-    sessionStorage.removeItem(OTP_KEY)
-    sessionStorage.removeItem(OTP_EMAIL_KEY)
-    sessionStorage.removeItem(OTP_EXPIRES_KEY)
+    persistUser(next)
   }, [])
+
+  useEffect(() => {
+    if (!user?.email) return
+    let cancelled = false
+    fetchUserMe(user.email)
+      .then((fresh) => {
+        if (!cancelled) applyUser(fresh)
+      })
+      .catch(() => {
+        /* keep cached user if API unavailable */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- refresh once on mount when cached session exists
+
+  const loginWithEmail = useCallback(
+    async (email: string, verifiedUser?: AuthUser) => {
+      const normalized = email.trim().toLowerCase()
+      let nextUser: AuthUser = verifiedUser ?? { email: normalized }
+
+      try {
+        nextUser = await fetchUserMe(normalized)
+      } catch {
+        /* API unreachable or /user/me missing — use verify response */
+      }
+
+      applyUser(nextUser)
+      sessionStorage.removeItem(OTP_EMAIL_KEY)
+    },
+    [applyUser],
+  )
 
   const logout = useCallback(() => {
     setUser(null)
+    clearAuthStorage()
   }, [])
+
+  const refreshUser = useCallback(async () => {
+    if (!user?.email) return
+    const fresh = await fetchUserMe(user.email)
+    applyUser(fresh)
+  }, [user?.email, applyUser])
+
+  const updateProfile = useCallback(
+    async (fullName: string) => {
+      if (!user?.email) return
+      const trimmed = fullName.trim()
+      const res = await fetch('/api/user/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, fullName: trimmed }),
+      })
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res))
+      }
+
+      const data = (await res.json()) as { email: string; fullName?: string }
+      applyUser({
+        email: data.email.trim().toLowerCase(),
+        fullName: (data.fullName ?? trimmed).trim() || undefined,
+      })
+    },
+    [user?.email, applyUser],
+  )
 
   const sendOtp = useCallback(async (email: string) => {
     const normalized = email.trim().toLowerCase()
-    await new Promise((r) => setTimeout(r, 900))
-    const code = generateOtp()
-    sessionStorage.setItem(OTP_KEY, code)
+    const res = await fetch('/api/auth/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normalized }),
+    })
+
+    if (!res.ok) {
+      throw new Error(await parseApiError(res))
+    }
+
     sessionStorage.setItem(OTP_EMAIL_KEY, normalized)
-    sessionStorage.setItem(OTP_EXPIRES_KEY, String(Date.now() + 10 * 60 * 1000))
-    return code
   }, [])
 
-  const verifyOtp = useCallback((email: string, code: string) => {
+  const verifyOtp = useCallback(async (email: string, code: string) => {
     const normalized = email.trim().toLowerCase()
-    const storedEmail = sessionStorage.getItem(OTP_EMAIL_KEY)
-    const storedOtp = sessionStorage.getItem(OTP_KEY)
-    const expires = Number(sessionStorage.getItem(OTP_EXPIRES_KEY) ?? 0)
-    if (!storedOtp || !storedEmail || storedEmail !== normalized) return false
-    if (Date.now() > expires) return false
-    return storedOtp === code.trim()
+    let res: Response
+    try {
+      res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalized, code: code.trim() }),
+      })
+    } catch {
+      return {
+        ok: false,
+        error: 'Cannot reach the server. Run npm run dev (starts API + website).',
+      }
+    }
+
+    let data: { success: boolean; error?: string; user?: { email: string; fullName?: string } }
+    try {
+      data = (await res.json()) as typeof data
+    } catch {
+      return { ok: false, error: 'Invalid response from server. Please try again.' }
+    }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: data.error ?? 'Something went wrong. Please try again.',
+      }
+    }
+
+    if (!data.success) {
+      return { ok: false, error: data.error ?? 'Invalid or expired code.' }
+    }
+
+    const authUser: AuthUser = {
+      email: normalized,
+      fullName: (data.user?.fullName ?? '').trim() || undefined,
+    }
+
+    return { ok: true, user: authUser }
   }, [])
 
   const getPendingOtpEmail = useCallback(() => sessionStorage.getItem(OTP_EMAIL_KEY), [])
 
   const value = useMemo<AuthContextValue>(() => {
     const email = user?.email ?? ''
+    const fullName = user?.fullName
     return {
       user,
       isLoggedIn: Boolean(user),
-      avatarInitials: user ? getInitials(email, user.name) : '',
+      avatarInitials: user ? getInitials(email, fullName) : '',
       avatarColor: user ? getAvatarColor(email) : '#9ca3af',
-      displayName: user ? getDisplayName(email, user.name) : '',
-      login,
+      displayName: user ? getDisplayName(email, fullName) : '',
+      loginWithEmail,
       logout,
+      updateProfile,
+      refreshUser,
       sendOtp,
       verifyOtp,
       getPendingOtpEmail,
     }
-  }, [user, login, logout, sendOtp, verifyOtp, getPendingOtpEmail])
+  }, [
+    user,
+    loginWithEmail,
+    logout,
+    updateProfile,
+    refreshUser,
+    sendOtp,
+    verifyOtp,
+    getPendingOtpEmail,
+  ])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

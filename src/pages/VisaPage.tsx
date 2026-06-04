@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { countries, getCountry, type Country } from '../data/countries'
+import { useAuth } from '../context/AuthContext'
+import { createApplication } from '../utils/applications'
 import { SiteLayout } from '../components/SiteLayout'
 
 const BRAND = '#f93e42'
@@ -550,6 +552,7 @@ export default function VisaPage() {
   const { countrySlug } = useParams<{ countrySlug: string }>()
   const country = countrySlug ? getCountry(countrySlug) : undefined
   const navigate = useNavigate()
+  const { user, isLoggedIn } = useAuth()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const [travelers, setTravelers] = useState(1)
   const [openFaq, setOpenFaq] = useState<number | null>(null)
@@ -644,7 +647,14 @@ export default function VisaPage() {
     isMobile,
     applyHover,
     setApplyHover,
-    onApply: () => navigate('/sign-in'),
+    onApply: () => {
+      if (!isLoggedIn || !user) {
+        navigate('/sign-in')
+        return
+      }
+      const application = createApplication(user.email, country, travelers, total)
+      navigate(`/user/me/applications/${application.id}`)
+    },
   }
 
   return (

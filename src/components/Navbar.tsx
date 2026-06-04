@@ -78,22 +78,27 @@ const iconCircle: CSSProperties = {
 }
 
 export function Navbar({
-  activeTab,
+  activeTab = 'explore',
   setActiveTab,
   isMobile,
   isLoggedIn = false,
   avatarInitials,
   avatarColor,
   profilePhotoUrl,
+  showTabs = true,
+  showEvents = true,
 }: {
-  activeTab: 'explore' | 'events'
-  setActiveTab: (tab: 'explore' | 'events') => void
+  activeTab?: 'explore' | 'events'
+  setActiveTab?: (tab: 'explore' | 'events') => void
   isMobile: boolean
   isLoggedIn?: boolean
   avatarInitials?: string
   avatarColor?: string
   profilePhotoUrl?: string
+  showTabs?: boolean
+  showEvents?: boolean
 }) {
+  const tabsVisible = showTabs && !isMobile
   const tabStyle = (active: boolean): CSSProperties => ({
     display: 'inline-flex',
     alignItems: 'center',
@@ -120,7 +125,7 @@ export function Navbar({
         WebkitBackdropFilter: 'blur(20px)',
         padding: isMobile ? '12px 16px' : '12px 32px',
         display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr auto' : '1fr auto 1fr',
+        gridTemplateColumns: tabsVisible ? '1fr auto 1fr' : '1fr auto',
         alignItems: 'center',
         gap: 16,
       }}
@@ -156,16 +161,18 @@ export function Navbar({
         )}
       </Link>
 
-      {!isMobile && (
+      {tabsVisible && setActiveTab && (
         <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
           <button type="button" onClick={() => setActiveTab('explore')} style={tabStyle(activeTab === 'explore')}>
             <PassportSvg active={activeTab === 'explore'} />
             Explore
           </button>
-          <button type="button" onClick={() => setActiveTab('events')} style={tabStyle(activeTab === 'events')}>
-            <TicketSvg active={activeTab === 'events'} />
-            Events
-          </button>
+          {showEvents && setActiveTab && (
+            <button type="button" onClick={() => setActiveTab('events')} style={tabStyle(activeTab === 'events')}>
+              <TicketSvg active={activeTab === 'events'} />
+              Events
+            </button>
+          )}
         </nav>
       )}
 

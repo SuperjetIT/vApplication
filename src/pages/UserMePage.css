@@ -421,6 +421,12 @@
   border: 1px solid #a7f3d0;
 }
 
+.user-me-alert--error {
+  background: #fff8f8;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
 @media (max-width: 768px) {
   .user-me-layout {
     grid-template-columns: 1fr;

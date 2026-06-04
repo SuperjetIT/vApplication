@@ -8,9 +8,8 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { SiteLayout } from '../components/SiteLayout'
+import { Navbar } from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
-import { getDisplayName } from '../utils/avatar'
 import './SignInPage.css'
 
 const OTP_LENGTH = 6
@@ -26,7 +25,7 @@ function maskEmail(email: string) {
 export default function OtpVerifyPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { verifyOtp, login, sendOtp, getPendingOtpEmail } = useAuth()
+  const { verifyOtp, loginWithEmail, sendOtp, getPendingOtpEmail } = useAuth()
 
   const emailFromState = (location.state as { email?: string } | null)?.email
   const [email] = useState(() => emailFromState ?? getPendingOtpEmail() ?? '')
@@ -36,7 +35,14 @@ export default function OtpVerifyPage() {
   const [loading, setLoading] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
 
   useEffect(() => {
     if (!email) {
@@ -65,18 +71,28 @@ export default function OtpVerifyPage() {
         return
       }
       setLoading(true)
-      await new Promise((r) => setTimeout(r, 500))
-      const ok = verifyOtp(email, otpCode)
-      setLoading(false)
-      if (!ok) {
-        setMessage({ type: 'error', text: 'Invalid or expired code. Try again or resend OTP.' })
-        return
+      try {
+        const result = await verifyOtp(email, otpCode)
+        if (!result.ok) {
+          setMessage({
+            type: 'error',
+            text: result.error ?? 'Invalid or expired code. Try again or resend OTP.',
+          })
+          return
+        }
+        await loginWithEmail(email, result.user)
+        setMessage({ type: 'success', text: 'Signed in successfully. Redirecting…' })
+        window.setTimeout(() => navigate('/', { replace: true }), 600)
+      } catch (err) {
+        setMessage({
+          type: 'error',
+          text: err instanceof Error ? err.message : 'Could not load your profile.',
+        })
+      } finally {
+        setLoading(false)
       }
-      login({ email, name: getDisplayName(email) })
-      setMessage({ type: 'success', text: 'Signed in successfully. Redirecting…' })
-      window.setTimeout(() => navigate('/', { replace: true }), 600)
     },
-    [otpCode, email, verifyOtp, login, navigate],
+    [otpCode, email, verifyOtp, loginWithEmail, navigate],
   )
 
   const handleResend = async () => {
@@ -89,8 +105,11 @@ export default function OtpVerifyPage() {
       setCountdown(COUNTDOWN_START)
       setCanResend(false)
       setMessage({ type: 'success', text: 'A new 6-digit code has been sent to your email.' })
-    } catch {
-      setMessage({ type: 'error', text: 'Could not resend OTP. Please try again.' })
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Could not resend OTP. Please try again.',
+      })
     } finally {
       setResendLoading(false)
     }
@@ -131,20 +150,25 @@ export default function OtpVerifyPage() {
   if (!email) return null
 
   return (
-    <SiteLayout>
+    <div className="signin-shell signin-verify-shell">
+      <Navbar
+        activeTab="explore"
+        setActiveTab={() => {}}
+        isMobile={isMobile}
+        showEvents={false}
+      />
+
       <main className="signin-page signin-page--gradient">
-        <section className="signin-card" aria-labelledby="otp-title">
+        <div className="signin-layout">
+          <section className="signin-card" aria-labelledby="otp-title">
+          <div className="signin-card__mobile-brand">
+            <span className="signin-brand__logo">supervisa</span>
+          </div>
           <p className="signin-kicker">Verify your email</p>
           <h1 id="otp-title">Enter OTP</h1>
           <p className="signin-subtitle">
             We sent a 6-digit code to <strong>{maskEmail(email)}</strong>
           </p>
-
-          {import.meta.env.DEV && (
-            <p className="signin-dev-hint" aria-hidden>
-              Demo: check session storage key <code>supervisa_otp</code> for the code.
-            </p>
-          )}
 
           {message && (
             <div
@@ -212,7 +236,8 @@ export default function OtpVerifyPage() {
             <Link to="/sign-in">← Use a different email</Link>
           </p>
         </section>
+        </div>
       </main>
-    </SiteLayout>
+    </div>
   )
 }
