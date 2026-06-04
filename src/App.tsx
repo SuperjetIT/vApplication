@@ -9,6 +9,7 @@ import OtpVerifyPage from './pages/OtpVerifyPage'
 import SchengenPage from './pages/SchengenPage'
 import SignInPage from './pages/SignInPage'
 import UserApplicationPage from './pages/UserApplicationPage'
+import ApplyPage from './pages/ApplyPage'
 import UserMePage from './pages/UserMePage'
 import VisaPage from './pages/VisaPage'
 
@@ -88,6 +89,7 @@ function AppContent() {
         <Route path="/" element={<HomePage />} />
         <Route path="/visa/schengen" element={<SchengenPage />} />
         <Route path="/visa/:countrySlug" element={<VisaPage />} />
+        <Route path="/apply" element={<ApplyPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/sign-in" element={<SignInPage />} />
         <Route path="/sign-in/verify" element={<OtpVerifyPage />} />

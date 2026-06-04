@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { countries, getCountry, type Country, type VisaOption } from '../data/countries'
-import { useAuth } from '../context/AuthContext'
 import { useCitizenship } from '../context/CitizenshipContext'
 import { flagUrl } from '../utils/flags'
-import { createApplication } from '../utils/applications'
 import { SiteLayout } from '../components/SiteLayout'
 
 const BRAND = '#f93e42'
@@ -843,7 +841,6 @@ export default function VisaPage() {
   const country = countrySlug ? getCountry(countrySlug) : undefined
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user, isLoggedIn } = useAuth()
   const { citizenship, countryCode } = useCitizenship()
   const [passportCitizenship, setPassportCitizenship] = useState(citizenship)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
@@ -975,12 +972,9 @@ export default function VisaPage() {
     applyHover,
     setApplyHover,
     onApply: () => {
-      if (!isLoggedIn || !user) {
-        navigate('/sign-in')
-        return
-      }
-      const application = createApplication(user.email, country, travelers, total)
-      navigate(`/user/me/applications/${application.id}`)
+      navigate(
+        `/apply?destination=${encodeURIComponent(country.slug)}&option=${encodeURIComponent(selectedOptionId)}&step=travelers`,
+      )
     },
   }
 
