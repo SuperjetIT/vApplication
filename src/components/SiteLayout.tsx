@@ -3,7 +3,13 @@ import { ChevronIcon, ExploreIcon, EventsIcon, HomeIcon, ProfileIcon } from './i
 import { flagUrl } from '../utils/flags'
 import './SiteLayout.css'
 
-export function SiteLayout({ children }: { children: React.ReactNode }) {
+export function SiteLayout({
+  children,
+  hideDefaultFooter = false,
+}: {
+  children: React.ReactNode
+  hideDefaultFooter?: boolean
+}) {
   const { pathname } = useLocation()
   const isHome = pathname === '/'
 
@@ -42,6 +48,7 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
 
       {children}
 
+      {!hideDefaultFooter && (
       <footer className="site-footer">
         <div className="site-footer__grid">
           <div>
@@ -89,6 +96,7 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
           </span>
         </div>
       </footer>
+      )}
 
       <nav className="mobile-nav" aria-label="Mobile">
         <Link to="/" className={`mobile-nav__item ${isHome ? 'is-active' : ''}`}>

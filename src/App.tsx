@@ -10,6 +10,7 @@ import SchengenPage from './pages/SchengenPage'
 import SignInPage from './pages/SignInPage'
 import UserApplicationPage from './pages/UserApplicationPage'
 import ApplyPage from './pages/ApplyPage'
+import InvoicePage from './pages/InvoicePage'
 import UserMePage from './pages/UserMePage'
 import VisaPage from './pages/VisaPage'
 
@@ -35,7 +36,7 @@ function CookiesBanner({ onAccept }: { onAccept: () => void }) {
       }}
     >
       <p style={{ margin: 0, fontSize: 14, color: '#333' }}>
-        We use cookies to enhance your experience on Atlys.
+        We use cookies to enhance your experience on Super Visa.
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <button
@@ -90,6 +91,7 @@ function AppContent() {
         <Route path="/visa/schengen" element={<SchengenPage />} />
         <Route path="/visa/:countrySlug" element={<VisaPage />} />
         <Route path="/apply" element={<ApplyPage />} />
+        <Route path="/invoice" element={<InvoicePage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/sign-in" element={<SignInPage />} />
         <Route path="/sign-in/verify" element={<OtpVerifyPage />} />

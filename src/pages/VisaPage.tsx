@@ -4,6 +4,7 @@ import { countries, getCountry, type Country, type VisaOption } from '../data/co
 import { useCitizenship } from '../context/CitizenshipContext'
 import { flagUrl } from '../utils/flags'
 import { SiteLayout } from '../components/SiteLayout'
+import { SiteFooter } from '../components/SiteFooter'
 
 const BRAND = '#f93e42'
 const BRAND_HOVER = '#d42e32'
@@ -779,7 +780,7 @@ function PaymentSidebar({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <ShieldIcon color="#fff" />
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Atlys Protect</span>
+          <span style={{ fontWeight: 700, fontSize: 15 }}>Super Protect</span>
           <span
             style={{
               marginLeft: 'auto',
@@ -794,7 +795,7 @@ function PaymentSidebar({
             Included
           </span>
         </div>
-        <p style={{ margin: '0 0 6px', fontSize: 13, opacity: 0.9 }}>If Visa Delayed — No Atlys Fee</p>
+        <p style={{ margin: '0 0 6px', fontSize: 13, opacity: 0.9 }}>If Visa Delayed — No Super Visa Fee</p>
         <p style={{ margin: 0, fontSize: 13, opacity: 0.9 }}>If Rejected — 100% Refund</p>
       </div>
 
@@ -910,7 +911,7 @@ export default function VisaPage() {
       },
       {
         q: 'What if my visa is rejected?',
-        a: 'With Atlys Protect, rejected applications qualify for a 100% refund of Atlys fees per our policy.',
+        a: 'With Super Protect, rejected applications qualify for a 100% refund of Super Visa fees per our policy.',
       },
       {
         q: 'Is my payment secure?',
@@ -934,7 +935,7 @@ export default function VisaPage() {
 
   if (!country) {
     return (
-      <SiteLayout>
+      <SiteLayout hideDefaultFooter>
         <main
           style={{
             maxWidth: MAX_W,
@@ -979,7 +980,7 @@ export default function VisaPage() {
   }
 
   return (
-    <SiteLayout>
+    <SiteLayout hideDefaultFooter>
       <style>{`
         .visa-reviews-scroll {
           display: flex;
@@ -1566,7 +1567,7 @@ export default function VisaPage() {
                       </div>
                     ))}
                     <span style={{ fontSize: 13, fontWeight: 600, color: TEXT_MUTED, marginLeft: 4 }}>
-                      Atlys Research Team
+                      Super Visa Research Team
                     </span>
                   </div>
                 </div>
@@ -1581,6 +1582,7 @@ export default function VisaPage() {
           </div>
         </div>
       </main>
+      <SiteFooter isMobile={isMobile} />
     </SiteLayout>
   )
 }

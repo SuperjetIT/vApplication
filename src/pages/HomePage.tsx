@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
+import { SiteFooter } from '../components/SiteFooter'
 import { useAuth } from '../context/AuthContext'
 import { useCitizenship } from '../context/CitizenshipContext'
 import { getCitizenshipByCode } from '../data/citizenships'
@@ -161,6 +162,8 @@ function DropdownOption({
         background: selected ? '#fff8f8' : 'transparent',
         cursor: 'pointer',
         pointerEvents: 'all',
+        position: 'relative',
+        zIndex: 99999,
         fontSize: 15,
         textAlign: 'left',
         color: '#111827',
@@ -220,6 +223,7 @@ function CalendarPopup({
         padding: 16,
         zIndex: 99999,
         pointerEvents: 'all',
+        isolation: 'isolate',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -571,7 +575,7 @@ export default function HomePage() {
   const [filterBarHeight, setFilterBarHeight] = useState(72)
 
   const heroRef = useRef<HTMLElement>(null)
-  const filterDropdownRef = useRef<HTMLDivElement>(null)
+  const filterBarRef = useRef<HTMLDivElement>(null)
   const filterBarInnerRef = useRef<HTMLDivElement>(null)
   const heroSearchRef = useRef<HTMLInputElement>(null)
 
@@ -633,14 +637,16 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run IP detection once on mount
   }, [])
 
+  const closeAllDropdowns = () => setOpenDropdown(null)
+
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
-        setOpenDropdown(null)
+    const handler = (e: MouseEvent) => {
+      if (filterBarRef.current && !filterBarRef.current.contains(e.target as Node)) {
+        closeAllDropdowns()
       }
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
   }, [])
 
   useEffect(() => {
@@ -698,6 +704,13 @@ export default function HomePage() {
     boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
     padding: 16,
     pointerEvents: 'all',
+    isolation: 'isolate',
+  }
+
+  const filterSectionWrap: CSSProperties = {
+    position: 'relative',
+    zIndex: 9999,
+    isolation: 'isolate',
   }
 
   const filterBarInner = (
@@ -717,7 +730,14 @@ export default function HomePage() {
         overflow: 'visible',
       }}
     >
-      <div style={{ position: 'relative', flex: isMobile ? '0 0 auto' : 1, minWidth: isMobile ? 140 : undefined, borderRight: '1px solid #eee' }}>
+      <div
+        style={{
+          ...filterSectionWrap,
+          flex: isMobile ? '0 0 auto' : 1,
+          minWidth: isMobile ? 140 : undefined,
+          borderRight: '1px solid #eee',
+        }}
+      >
         <button
           type="button"
           onClick={() => setOpenDropdown(openDropdown === 'delivery' ? null : 'delivery')}
@@ -746,7 +766,14 @@ export default function HomePage() {
           </div>
         )}
       </div>
-      <div style={{ position: 'relative', flex: isMobile ? '0 0 auto' : 1, minWidth: isMobile ? 140 : undefined, borderRight: '1px solid #eee' }}>
+      <div
+        style={{
+          ...filterSectionWrap,
+          flex: isMobile ? '0 0 auto' : 1,
+          minWidth: isMobile ? 140 : undefined,
+          borderRight: '1px solid #eee',
+        }}
+      >
         <button
           type="button"
           onClick={() => setOpenDropdown(openDropdown === 'type' ? null : 'type')}
@@ -775,7 +802,14 @@ export default function HomePage() {
           </div>
         )}
       </div>
-      <div style={{ position: 'relative', flex: isMobile ? '0 0 auto' : 1, minWidth: isMobile ? 140 : undefined, borderRight: '1px solid #eee' }}>
+      <div
+        style={{
+          ...filterSectionWrap,
+          flex: isMobile ? '0 0 auto' : 1,
+          minWidth: isMobile ? 140 : undefined,
+          borderRight: '1px solid #eee',
+        }}
+      >
         <button
           type="button"
           onClick={() => setOpenDropdown(openDropdown === 'documents' ? null : 'documents')}
@@ -806,7 +840,7 @@ export default function HomePage() {
       </div>
       <div
         style={{
-          position: 'relative',
+          ...filterSectionWrap,
           flex: isMobile ? '0 0 auto' : 1,
           minWidth: isMobile ? 140 : undefined,
           ...(openDropdown === 'holidays'
@@ -1031,8 +1065,11 @@ export default function HomePage() {
           {filterSticky && <div style={{ height: filterBarHeight }} aria-hidden />}
 
           <div
-            ref={filterDropdownRef}
+            ref={filterBarRef}
             style={{
+              position: 'relative',
+              zIndex: 9999,
+              isolation: 'isolate',
               padding: isMobile ? '0 12px 16px' : '0 32px 24px',
               ...(filterSticky
                 ? {
@@ -1040,7 +1077,7 @@ export default function HomePage() {
                     top: 64,
                     left: 0,
                     right: 0,
-                    zIndex: openDropdown ? 10001 : 999,
+                    zIndex: 9999,
                     background: openDropdown ? 'transparent' : 'rgba(255,255,255,0.95)',
                     backdropFilter: openDropdown ? 'none' : 'blur(20px)',
                     WebkitBackdropFilter: openDropdown ? 'none' : 'blur(20px)',
@@ -1095,7 +1132,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="country-cards-grid">
+          <div className="country-cards-grid" style={{ position: 'relative', zIndex: 1 }}>
             {filtered.map((country) => (
               <CountryCard key={country.slug} country={country} isMobile={isMobile} />
             ))}
@@ -1106,6 +1143,8 @@ export default function HomePage() {
             </p>
           )}
         </main>
+
+        <SiteFooter isMobile={isMobile} />
       </div>
 
       {ipToast && hasSavedCitizenship && (
