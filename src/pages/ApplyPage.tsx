@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useCitizenship } from '../context/CitizenshipContext'
 import { ALL_CITIZENSHIPS } from '../data/citizenships'
 import { getCountry, type Country, type VisaOption } from '../data/countries'
+import { SiteFooter } from '../components/SiteFooter'
 import { flagUrl } from '../utils/flags'
 
 const BRAND = '#f93e42'
@@ -1873,6 +1874,7 @@ export default function ApplyPage() {
           </div>
         </main>
       </div>
+      <SiteFooter isMobile={isMobile} />
     </div>
   )
 }

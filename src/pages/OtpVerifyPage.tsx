@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
+import { SiteFooter } from '../components/SiteFooter'
 import { useAuth } from '../context/AuthContext'
 import './SignInPage.css'
 
@@ -238,6 +239,7 @@ export default function OtpVerifyPage() {
         </section>
         </div>
       </main>
+      <SiteFooter isMobile={isMobile} />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
+import { SiteFooter } from '../components/SiteFooter'
 import { useAuth } from '../context/AuthContext'
 import './SignInPage.css'
 
@@ -169,6 +170,7 @@ export default function SignInPage() {
           </section>
         </div>
       </main>
+      <SiteFooter isMobile={isMobile} />
     </div>
   )
 }

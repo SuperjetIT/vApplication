@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { SiteFooter } from '../components/SiteFooter'
 import { flagUrl } from '../utils/flags'
 
 const BRAND = '#f93e42'
@@ -105,6 +106,7 @@ export default function InvoicePage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [showConfetti, setShowConfetti] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
 
   const status = searchParams.get('status') === 'failed' ? 'failed' : 'success'
   const isSuccess = status === 'success'
@@ -131,6 +133,12 @@ export default function InvoicePage() {
       : govTotal + processingTotal - discount
   const vat = Math.round(subtotal * 0.05)
   const grandTotal = amount > 0 ? amount : subtotal + vat
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
 
   useEffect(() => {
     if (!isSuccess) return
@@ -468,6 +476,7 @@ export default function InvoicePage() {
           </div>
         </div>
       </div>
+      <SiteFooter isMobile={isMobile} />
     </>
   )
 }

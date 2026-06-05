@@ -4,7 +4,6 @@ import { countries, getCountry, type Country, type VisaOption } from '../data/co
 import { useCitizenship } from '../context/CitizenshipContext'
 import { flagUrl } from '../utils/flags'
 import { SiteLayout } from '../components/SiteLayout'
-import { SiteFooter } from '../components/SiteFooter'
 
 const BRAND = '#f93e42'
 const BRAND_HOVER = '#d42e32'
@@ -935,7 +934,7 @@ export default function VisaPage() {
 
   if (!country) {
     return (
-      <SiteLayout hideDefaultFooter>
+      <SiteLayout>
         <main
           style={{
             maxWidth: MAX_W,
@@ -980,7 +979,7 @@ export default function VisaPage() {
   }
 
   return (
-    <SiteLayout hideDefaultFooter>
+    <SiteLayout>
       <style>{`
         .visa-reviews-scroll {
           display: flex;
@@ -1582,7 +1581,6 @@ export default function VisaPage() {
           </div>
         </div>
       </main>
-      <SiteFooter isMobile={isMobile} />
     </SiteLayout>
   )
 }

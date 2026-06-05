@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
+import { SiteFooter } from '../components/SiteFooter'
 import { useAuth } from '../context/AuthContext'
 import {
   getApplicationsForUser,
@@ -361,6 +362,7 @@ export default function UserMePage() {
           </div>
         </div>
       </div>
+      <SiteFooter isMobile={isMobile} />
     </div>
   )
 }

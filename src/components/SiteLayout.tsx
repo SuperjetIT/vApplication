@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ChevronIcon, ExploreIcon, EventsIcon, HomeIcon, ProfileIcon } from './icons'
 import { flagUrl } from '../utils/flags'
+import { SiteFooter } from './SiteFooter'
 import './SiteLayout.css'
 
 export function SiteLayout({
@@ -12,6 +14,13 @@ export function SiteLayout({
 }) {
   const { pathname } = useLocation()
   const isHome = pathname === '/'
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
 
   return (
     <div className="site-shell">
@@ -48,55 +57,7 @@ export function SiteLayout({
 
       {children}
 
-      {!hideDefaultFooter && (
-      <footer className="site-footer">
-        <div className="site-footer__grid">
-          <div>
-            <h4>Company</h4>
-            <ul>
-              <li><a href="#careers">Careers</a></li>
-              <li><a href="#newsroom">Newsroom</a></li>
-              <li><Link to="/contact">Contact</Link></li>
-              <li><a href="#partners">Partners</a></li>
-            </ul>
-          </div>
-          <div>
-            <h4>Products</h4>
-            <ul>
-              <li><a href="#requirements">Visa Requirements</a></li>
-              <li><a href="#photo">Visa Photo Creator</a></li>
-              <li><a href="#helpline">Emergency Helpline</a></li>
-              <li><a href="#student">Student Visa</a></li>
-            </ul>
-          </div>
-          <div>
-            <h4>Guides</h4>
-            <ul>
-              <li><Link to="/visa/schengen">Schengen Visa</Link></li>
-              <li><a href="#us">US Visa</a></li>
-              <li><a href="#uk">UK Visa</a></li>
-              <li><a href="#japan">Japan Visa</a></li>
-            </ul>
-          </div>
-          <div>
-            <h4>Offices</h4>
-            <ul className="offices">
-              <li>447 Broadway STE 851, New York, USA</li>
-              <li>M16, Al Quoz 3, Sheikh Zayed Rd, Dubai, UAE</li>
-              <li>7 Khullar Farms, New Delhi, India</li>
-            </ul>
-          </div>
-        </div>
-        <div className="site-footer__bottom">
-          <span>© vApplication, All rights reserved</span>
-          <span className="site-footer__links">
-            <a href="#privacy">Privacy</a>
-            <span aria-hidden>•</span>
-            <a href="#terms">Terms</a>
-          </span>
-        </div>
-      </footer>
-      )}
+      {!hideDefaultFooter && <SiteFooter isMobile={isMobile} />}
 
       <nav className="mobile-nav" aria-label="Mobile">
         <Link to="/" className={`mobile-nav__item ${isHome ? 'is-active' : ''}`}>

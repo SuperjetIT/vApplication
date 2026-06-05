@@ -20,6 +20,47 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
+const CONTACT_TO = process.env.CONTACT_TO || 'procurement@superjetgroup.com'
+
+function buildContactEmailHtml({ fullName, email, phone, subject, message }) {
+  const safe = (s) =>
+    String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Inter,Segoe UI,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+    <tr>
+      <td style="background:linear-gradient(135deg,#f93e42,#ff6b6b);padding:24px 28px;">
+        <span style="font-weight:700;font-size:20px;color:#fff;">Super Visa — New contact message</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:28px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="font-size:15px;color:#374151;">
+          <tr><td style="padding:8px 0;color:#6b7280;width:100px;">Name</td><td style="padding:8px 0;font-weight:600;">${safe(fullName)}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Email</td><td style="padding:8px 0;"><a href="mailto:${safe(email)}" style="color:#f93e42;">${safe(email)}</a></td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Phone</td><td style="padding:8px 0;">${safe(phone || '—')}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Subject</td><td style="padding:8px 0;font-weight:600;">${safe(subject)}</td></tr>
+        </table>
+        <div style="margin-top:20px;padding:16px;background:#fafafa;border-radius:12px;border:1px solid #eee;">
+          <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6b7280;">Message</p>
+          <p style="margin:0;font-size:15px;line-height:1.6;color:#111827;white-space:pre-wrap;">${safe(message)}</p>
+        </div>
+        <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;">Reply directly to this email to reach the customer.</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}
+
 function buildOtpEmailHtml(code) {
   return `
 <!DOCTYPE html>
@@ -80,6 +121,66 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     smtpConfigured: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
   })
+})
+
+app.post('/api/contact', async (req, res) => {
+  const fullName = String(req.body?.fullName ?? '').trim()
+  const email = String(req.body?.email ?? '')
+    .trim()
+    .toLowerCase()
+  const phone = String(req.body?.phone ?? '').trim()
+  const subject = String(req.body?.subject ?? '').trim()
+  const message = String(req.body?.message ?? '').trim()
+
+  if (!fullName) {
+    return res.status(400).json({ error: 'Full name is required.' })
+  }
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' })
+  }
+  if (!subject) {
+    return res.status(400).json({ error: 'Please select a subject.' })
+  }
+  if (message.length < 10) {
+    return res.status(400).json({ error: 'Message must be at least 10 characters.' })
+  }
+
+  const mailer = getTransporter()
+  if (!mailer) {
+    return res.status(503).json({
+      error:
+        'Email service is not configured. Run npm run dev and add SMTP settings to .env',
+    })
+  }
+
+  const from = process.env.SMTP_FROM || `"Super Visa" <${process.env.SMTP_USER}>`
+  const mailSubject = `[Super Visa Contact] ${subject}`
+
+  try {
+    await mailer.sendMail({
+      from,
+      to: CONTACT_TO,
+      replyTo: `"${fullName.replace(/"/g, '')}" <${email}>`,
+      subject: mailSubject,
+      text: [
+        `New contact form submission`,
+        ``,
+        `Name: ${fullName}`,
+        `Email: ${email}`,
+        `Phone: ${phone || '—'}`,
+        `Subject: ${subject}`,
+        ``,
+        message,
+      ].join('\n'),
+      html: buildContactEmailHtml({ fullName, email, phone, subject, message }),
+    })
+    return res.json({ success: true })
+  } catch (err) {
+    console.error('[contact]', err)
+    return res.status(500).json({
+      error: 'Could not send your message. Please try WhatsApp or call us directly.',
+    })
+  }
 })
 
 app.post('/api/auth/send-otp', async (req, res) => {
