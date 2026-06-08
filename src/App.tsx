@@ -36,7 +36,7 @@ function CookiesBanner({ onAccept }: { onAccept: () => void }) {
       }}
     >
       <p style={{ margin: 0, fontSize: 14, color: '#333' }}>
-        We use cookies to enhance your experience on Super Visa.
+        We use cookies to enhance your experience on Superjet Global.
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <button

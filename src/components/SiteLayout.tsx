@@ -26,8 +26,8 @@ export function SiteLayout({
     <div className="site-shell">
       <header className="site-header">
         <div className="site-header__inner">
-          <Link to="/" className="logo" aria-label="vApplication home">
-            vApplication
+          <Link to="/" className="logo" aria-label="Superjet Global home">
+            Superjet Global
           </Link>
 
           <nav className="header-tabs" aria-label="Main">
@@ -76,9 +76,9 @@ export function SiteLayout({
 export function PromoSection() {
   return (
     <section className="promo">
-      <p>vApplication helps you plan, apply, and track visas seamlessly across the world.</p>
+      <p>Superjet Global helps you plan, apply, and track visas seamlessly across the world.</p>
       <button type="button" className="promo__ai">
-        Ask AI about vApplication
+        Ask AI about Superjet Global
       </button>
     </section>
   )

@@ -769,7 +769,7 @@ export default function ContactPage() {
               }}
             >
               <iframe
-                title="Super Visa Dubai office map"
+                title="Superjet Global Dubai office map"
                 src="https://maps.google.com/maps?q=Fifty+One+Business+Bay+Dubai&t=&z=15&ie=UTF8&iwloc=&output=embed"
                 width="100%"
                 height={160}

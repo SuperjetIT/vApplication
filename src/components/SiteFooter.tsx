@@ -95,7 +95,7 @@ export function SiteFooter({ isMobile }: { isMobile: boolean }) {
         >
           <div>
             <span style={{ fontStyle: 'italic', fontWeight: 700, fontSize: 24, color: BRAND }}>
-              Super Visa
+              Superjet Global
             </span>
             <span style={{ marginLeft: 6, color: BRAND, fontSize: 20 }}>→</span>
           </div>
@@ -200,7 +200,7 @@ export function SiteFooter({ isMobile }: { isMobile: boolean }) {
           textAlign: isMobile ? 'center' : 'left',
         }}
       >
-        <span style={{ color: '#aaa', fontSize: 13 }}>Copyright © 2026 Superjet Visa</span>
+        <span style={{ color: '#aaa', fontSize: 13 }}>Copyright © 2026 Superjet Global</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
           <span
             style={{

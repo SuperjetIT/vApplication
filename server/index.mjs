@@ -38,7 +38,7 @@ function buildContactEmailHtml({ fullName, email, phone, subject, message }) {
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
     <tr>
       <td style="background:linear-gradient(135deg,#f93e42,#ff6b6b);padding:24px 28px;">
-        <span style="font-weight:700;font-size:20px;color:#fff;">Super Visa — New contact message</span>
+        <span style="font-weight:700;font-size:20px;color:#fff;">Superjet Global — New contact message</span>
       </td>
     </tr>
     <tr>
@@ -70,7 +70,7 @@ function buildOtpEmailHtml(code) {
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:40px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 8px 32px rgba(249,62,66,0.12);">
     <tr>
       <td style="background:linear-gradient(135deg,#f93e42,#e83539);padding:28px 32px;">
-        <span style="font-style:italic;font-weight:700;font-size:22px;color:#fff;">supervisa</span>
+        <span style="font-style:italic;font-weight:700;font-size:22px;color:#fff;">Superjet Global</span>
       </td>
     </tr>
     <tr>
@@ -153,8 +153,8 @@ app.post('/api/contact', async (req, res) => {
     })
   }
 
-  const from = process.env.SMTP_FROM || `"Super Visa" <${process.env.SMTP_USER}>`
-  const mailSubject = `[Super Visa Contact] ${subject}`
+  const from = process.env.SMTP_FROM || `"Superjet Global" <${process.env.SMTP_USER}>`
+  const mailSubject = `[Superjet Global Contact] ${subject}`
 
   try {
     await mailer.sendMail({
@@ -203,14 +203,14 @@ app.post('/api/auth/send-otp', async (req, res) => {
   const expires = Date.now() + OTP_TTL_MS
   otpStore.set(email, { code, expires })
 
-  const from = process.env.SMTP_FROM || `"supervisa" <${process.env.SMTP_USER}>`
+  const from = process.env.SMTP_FROM || `"Superjet Global" <${process.env.SMTP_USER}>`
 
   try {
     await mailer.sendMail({
       from,
       to: email,
-      subject: `${code} is your supervisa sign-in code`,
-      text: `Your supervisa verification code is ${code}. It expires in 10 minutes. If you didn't request this, ignore this email.`,
+      subject: `${code} is your Superjet Global sign-in code`,
+      text: `Your Superjet Global verification code is ${code}. It expires in 10 minutes. If you didn't request this, ignore this email.`,
       html: buildOtpEmailHtml(code),
     })
     return res.json({ success: true })
@@ -281,8 +281,8 @@ app.patch('/api/user/me', (req, res) => {
 })
 
 app.listen(PORT, () => {
-  console.log(`[supervisa-api] http://localhost:${PORT}`)
+  console.log(`[superjet-global-api] http://localhost:${PORT}`)
   if (!process.env.SMTP_USER) {
-    console.warn('[supervisa-api] SMTP_USER missing — copy .env.example to .env')
+    console.warn('[superjet-global-api] SMTP_USER missing — copy .env.example to .env')
   }
 })

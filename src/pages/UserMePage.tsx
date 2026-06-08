@@ -189,7 +189,7 @@ export default function UserMePage() {
           <aside className="user-me-sidebar">
             <div className="user-me-sidebar__brand">
               <Link to="/" className="user-me-sidebar__logo">
-                supervisa
+                Superjet Global
               </Link>
               <ShieldSmall />
             </div>
@@ -210,7 +210,7 @@ export default function UserMePage() {
                     </div>
                     <div>
                       <h1>Hi, {displayName}</h1>
-                      <p>Manage your supervisa account and travel profile</p>
+                      <p>Manage your Superjet Global account and travel profile</p>
                       <span className="user-me-badge">
                         <ShieldSmall /> Visas On Time Guaranteed
                       </span>
@@ -252,8 +252,8 @@ export default function UserMePage() {
                 </div>
 
                 <div className="user-me-protect">
-                  <h3>supervisa Protect</h3>
-                  <p>If Visa Delayed — No supervisa Fee</p>
+                  <h3>Superjet Global Protect</h3>
+                  <p>If Visa Delayed — No Superjet Global Fee</p>
                   <p>If Rejected — 100% Refund on processing fees</p>
                 </div>
               </>
@@ -264,7 +264,7 @@ export default function UserMePage() {
                 <h2 className="user-me-section-title">My Applications</h2>
                 <div className="user-me-accent" />
                 <p style={{ margin: '0 0 20px', color: '#6b7280', fontSize: 14 }}>
-                  Track visa applications submitted through supervisa
+                  Track visa applications submitted through Superjet Global
                 </p>
 
                 {applications.length > 0 ? (
@@ -303,7 +303,7 @@ export default function UserMePage() {
                   </div>
                 ) : (
                   <div className="user-me-empty">
-                    <p>No applications yet. Start your first visa with supervisa.</p>
+                    <p>No applications yet. Start your first visa with Superjet Global.</p>
                     <Link to="/" className="user-me-btn">
                       Explore destinations
                     </Link>

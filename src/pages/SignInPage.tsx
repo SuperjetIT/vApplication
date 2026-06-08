@@ -95,7 +95,7 @@ export default function SignInPage() {
             <div className="signin-hero__blob signin-hero__blob--2" />
             <div className="signin-hero__content">
               <div className="signin-hero__brand">
-                <span className="signin-hero__logo">supervisa</span>
+                <span className="signin-hero__logo">Superjet Global</span>
                 <ShieldBrand />
               </div>
               <h2 className="signin-hero__title">
@@ -115,7 +115,7 @@ export default function SignInPage() {
 
           <section className="signin-card" aria-labelledby="signin-title">
             <div className="signin-card__mobile-brand">
-              <span className="signin-brand__logo">supervisa</span>
+              <span className="signin-brand__logo">Superjet Global</span>
               <ShieldBrand />
             </div>
 

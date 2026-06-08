@@ -9,7 +9,7 @@ const sectionNav = [
   { id: 'visa-info', label: 'Visa Info' },
   { id: 'documents', label: 'Documents' },
   { id: 'fees', label: 'Fees' },
-  { id: 'why-atlys', label: 'Why vApplication' },
+  { id: 'why-atlys', label: 'Why Superjet Global' },
   { id: 'reviews', label: 'Reviews' },
   { id: 'countries', label: 'Countries' },
   { id: 'faqs', label: 'FAQs' },
@@ -30,11 +30,11 @@ const travelReasons = [
 
 const requirements = [
   { title: 'Passport', desc: 'Must be valid for next 6 months' },
-  { title: 'Visa Photo', desc: 'Crops and edits for you', tag: 'vApplication' },
+  { title: 'Visa Photo', desc: 'Crops and edits for you', tag: 'Superjet Global' },
   { title: 'Travel Itinerary', desc: 'Generates', tag: 'Generates' },
   { title: 'Financial Proof', desc: 'Verifies', tag: 'Verifies' },
   { title: 'Application Form', desc: 'Fills', tag: 'Fills' },
-  { title: 'Travel Insurance', desc: 'vApplication offers the best price', tag: 'vApplication' },
+  { title: 'Travel Insurance', desc: 'Superjet Global offers the best price', tag: 'Superjet Global' },
 ]
 
 const withAtlys = [
@@ -68,11 +68,11 @@ const faqs = [
   },
   {
     q: 'What are the Schengen visa requirements from UAE?',
-    a: 'You typically need a valid passport, photos, travel itinerary, financial proof, application form, and travel insurance. vApplication prepares and verifies these for you.',
+    a: 'You typically need a valid passport, photos, travel itinerary, financial proof, application form, and travel insurance. Superjet Global prepares and verifies these for you.',
   },
   {
     q: 'How to apply for a Schengen visa from UAE?',
-    a: 'Choose your main destination country, book an appointment, submit documents, and attend your biometrics interview. vApplication handles the full process end-to-end.',
+    a: 'Choose your main destination country, book an appointment, submit documents, and attend your biometrics interview. Superjet Global handles the full process end-to-end.',
   },
 ]
 
@@ -131,7 +131,7 @@ export default function SchengenPage() {
               <span>100%</span>
               Approval, guaranteed
             </div>
-            <h1>Get your Schengen visa easily with vApplication</h1>
+            <h1>Get your Schengen visa easily with Superjet Global</h1>
             <div className="schengen-hero__carousel" aria-live="polite">
               <div key={statIndex} className="schengen-hero__stat">
                 <strong>{heroStats[statIndex].title}</strong>
@@ -215,7 +215,7 @@ export default function SchengenPage() {
                 ))}
               </div>
               <p className="schengen-note schengen-note--center">
-                vApplication prepares and verifies all required documents for you.
+                Superjet Global prepares and verifies all required documents for you.
               </p>
             </div>
           </section>
@@ -253,14 +253,14 @@ export default function SchengenPage() {
 
           <section id="why-atlys" className="schengen-section">
             <div className="schengen-section__inner">
-              <h2>Why Apply with vApplication?</h2>
+              <h2>Why Apply with Superjet Global?</h2>
               <p className="schengen-lead">
-                vApplication handles your entire Schengen visa process in one place, end-to-end.
+                Superjet Global handles your entire Schengen visa process in one place, end-to-end.
               </p>
               <div className="compare-table">
                 <div className="compare-table__head">
                   <span />
-                  <span>With vApplication</span>
+                  <span>With Superjet Global</span>
                   <span>Doing it Yourself</span>
                 </div>
                 {withAtlys.map((item, i) => (
@@ -278,7 +278,7 @@ export default function SchengenPage() {
                 ))}
               </div>
               <button type="button" className="schengen-primary-btn">
-                Apply with vApplication
+                Apply with Superjet Global
               </button>
             </div>
           </section>
@@ -291,7 +291,7 @@ export default function SchengenPage() {
               </p>
               <div className="guarantee-box">
                 <p className="guarantee-box__title">
-                  vApplication offers a <strong>100% approval guarantee</strong>, or all your money back!
+                  Superjet Global offers a <strong>100% approval guarantee</strong>, or all your money back!
                 </p>
                 <ul className="schengen-list">
                   <li>Expert guidance ensures error-free applications</li>
@@ -328,7 +328,7 @@ export default function SchengenPage() {
               <h2>Start Your Schengen Visa Application Today</h2>
               <p>Apply in minutes. Everything handled for you.</p>
               <button type="button" className="schengen-primary-btn schengen-primary-btn--light">
-                Apply with vApplication
+                Apply with Superjet Global
               </button>
             </div>
           </section>

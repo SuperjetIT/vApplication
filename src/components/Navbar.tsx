@@ -144,7 +144,7 @@ export function Navbar({
               letterSpacing: '-0.02em',
             }}
           >
-            Super Visa
+            Superjet Global
           </span>
           <ShieldSvg />
         </div>

@@ -163,7 +163,7 @@ export default function OtpVerifyPage() {
         <div className="signin-layout">
           <section className="signin-card" aria-labelledby="otp-title">
           <div className="signin-card__mobile-brand">
-            <span className="signin-brand__logo">supervisa</span>
+            <span className="signin-brand__logo">Superjet Global</span>
           </div>
           <p className="signin-kicker">Verify your email</p>
           <h1 id="otp-title">Enter OTP</h1>

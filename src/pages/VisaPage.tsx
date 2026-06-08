@@ -794,7 +794,7 @@ function PaymentSidebar({
             Included
           </span>
         </div>
-        <p style={{ margin: '0 0 6px', fontSize: 13, opacity: 0.9 }}>If Visa Delayed — No Super Visa Fee</p>
+        <p style={{ margin: '0 0 6px', fontSize: 13, opacity: 0.9 }}>If Visa Delayed — No Superjet Global Fee</p>
         <p style={{ margin: 0, fontSize: 13, opacity: 0.9 }}>If Rejected — 100% Refund</p>
       </div>
 
@@ -906,11 +906,11 @@ export default function VisaPage() {
       },
       {
         q: 'Can I track my application?',
-        a: 'Yes. After you apply, you receive real-time status updates by email and in your supervisa dashboard.',
+        a: 'Yes. After you apply, you receive real-time status updates by email and in your Superjet Global dashboard.',
       },
       {
         q: 'What if my visa is rejected?',
-        a: 'With Super Protect, rejected applications qualify for a 100% refund of Super Visa fees per our policy.',
+        a: 'With Super Protect, rejected applications qualify for a 100% refund of Superjet Global fees per our policy.',
       },
       {
         q: 'Is my payment secure?',
@@ -1566,7 +1566,7 @@ export default function VisaPage() {
                       </div>
                     ))}
                     <span style={{ fontSize: 13, fontWeight: 600, color: TEXT_MUTED, marginLeft: 4 }}>
-                      Super Visa Research Team
+                      Superjet Global Research Team
                     </span>
                   </div>
                 </div>

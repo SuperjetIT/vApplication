@@ -224,7 +224,7 @@ export default function InvoicePage() {
               >
                 <div>
                   <span style={{ fontStyle: 'italic', fontWeight: 700, fontSize: 28, color: BRAND }}>
-                    Super Visa
+                    Superjet Global
                   </span>
                   <span style={{ marginLeft: 6, color: BRAND, fontSize: 22 }}>→</span>
                 </div>
@@ -332,7 +332,7 @@ export default function InvoicePage() {
                   amount={`AED ${govTotal}`}
                 />
                 <TableRow
-                  description="Super Visa Processing Fee"
+                  description="Superjet Global Processing Fee"
                   qty={String(travelers)}
                   unit={`AED ${processingFee}`}
                   amount={`AED ${processingTotal}`}
@@ -380,7 +380,7 @@ export default function InvoicePage() {
                     Super Protect — Included
                   </p>
                   <p style={{ margin: 0, fontSize: 13, color: '#666' }}>
-                    If Visa Delayed: No Super Visa Fee | If Rejected: 100% Refund
+                    If Visa Delayed: No Superjet Global Fee | If Rejected: 100% Refund
                   </p>
                 </div>
               </div>
@@ -388,7 +388,7 @@ export default function InvoicePage() {
           </div>
 
           <div style={{ textAlign: 'center', marginTop: 28 }}>
-            <p style={{ margin: '0 0 8px', color: '#888', fontSize: 13 }}>Thank you for choosing Super Visa</p>
+            <p style={{ margin: '0 0 8px', color: '#888', fontSize: 13 }}>Thank you for choosing Superjet Global</p>
             <button
               type="button"
               className="no-print"
@@ -408,7 +408,7 @@ export default function InvoicePage() {
               <WhatsAppIcon />
               Questions? Contact us on WhatsApp: +971 559641020
             </button>
-            <p style={{ margin: '0 0 24px', color: BRAND, fontSize: 14, fontWeight: 600 }}>supervisa.com</p>
+            <p style={{ margin: '0 0 24px', color: BRAND, fontSize: 14, fontWeight: 600 }}>superjetglobal.com</p>
 
             <div
               className="no-print"
