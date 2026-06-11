@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { CitizenshipModal } from './components/CitizenshipModal'
 import { AuthProvider } from './context/AuthContext'
 import { CitizenshipProvider, useCitizenship } from './context/CitizenshipContext'
@@ -12,7 +12,22 @@ import UserApplicationPage from './pages/UserApplicationPage'
 import ApplyPage from './pages/ApplyPage'
 import InvoicePage from './pages/InvoicePage'
 import UserMePage from './pages/UserMePage'
+import VisaCheckerPage from './pages/VisaCheckerPage'
+import VisaRequirementsPage from './pages/VisaRequirementsPage'
 import VisaPage from './pages/VisaPage'
+import { AdminGuard } from './components/AdminLayout'
+import AdminLoginPage from './pages/admin/AdminLoginPage'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminLeads from './pages/admin/AdminLeads'
+import AdminCustomers from './pages/admin/AdminCustomers'
+import AdminAgents from './pages/admin/AdminAgents'
+import AdminInvoices from './pages/admin/AdminInvoices'
+import AdminPayments from './pages/admin/AdminPayments'
+import AdminExpenses from './pages/admin/AdminExpenses'
+import AdminReports from './pages/admin/AdminReports'
+import AdminUsers from './pages/admin/AdminUsers'
+import AdminSettings from './pages/admin/AdminSettings'
+import AdminCaseDetail from './pages/admin/AdminCaseDetail'
 
 const BRAND = '#f93e42'
 
@@ -75,6 +90,8 @@ function CookiesBanner({ onAccept }: { onAccept: () => void }) {
 
 function AppContent() {
   const { isModalOpen } = useCitizenship()
+  const location = useLocation()
+  const isAdminRoute = location.pathname.startsWith('/admin')
   const [cookiesAccepted, setCookiesAccepted] = useState(
     () => localStorage.getItem('cookies_accepted') === 'true',
   )
@@ -88,6 +105,9 @@ function AppContent() {
     <>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/visa-checker" element={<VisaCheckerPage />} />
+        <Route path="/tools/visa-requirements" element={<VisaRequirementsPage />} />
+        <Route path="/tools/visa-requirements/:destinationSlug" element={<VisaRequirementsPage />} />
         <Route path="/visa/schengen" element={<SchengenPage />} />
         <Route path="/visa/:countrySlug" element={<VisaPage />} />
         <Route path="/apply" element={<ApplyPage />} />
@@ -97,10 +117,22 @@ function AppContent() {
         <Route path="/sign-in/verify" element={<OtpVerifyPage />} />
         <Route path="/user/me" element={<UserMePage />} />
         <Route path="/user/me/applications/:applicationId" element={<UserApplicationPage />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
+        <Route path="/admin/leads" element={<AdminGuard><AdminLeads /></AdminGuard>} />
+        <Route path="/admin/customers" element={<AdminGuard><AdminCustomers /></AdminGuard>} />
+        <Route path="/admin/agents" element={<AdminGuard><AdminAgents /></AdminGuard>} />
+        <Route path="/admin/invoices" element={<AdminGuard><AdminInvoices /></AdminGuard>} />
+        <Route path="/admin/payments" element={<AdminGuard><AdminPayments /></AdminGuard>} />
+        <Route path="/admin/expenses" element={<AdminGuard><AdminExpenses /></AdminGuard>} />
+        <Route path="/admin/reports" element={<AdminGuard><AdminReports /></AdminGuard>} />
+        <Route path="/admin/users" element={<AdminGuard><AdminUsers /></AdminGuard>} />
+        <Route path="/admin/settings" element={<AdminGuard><AdminSettings /></AdminGuard>} />
+        <Route path="/admin/cases/:id" element={<AdminGuard><AdminCaseDetail /></AdminGuard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      {isModalOpen && <CitizenshipModal />}
-      {!cookiesAccepted && <CookiesBanner onAccept={handleAcceptCookies} />}
+      {!isAdminRoute && isModalOpen && <CitizenshipModal />}
+      {!isAdminRoute && !cookiesAccepted && <CookiesBanner onAccept={handleAcceptCookies} />}
     </>
   )
 }

@@ -61,6 +61,51 @@ function buildContactEmailHtml({ fullName, email, phone, subject, message }) {
 </html>`
 }
 
+function buildVisaCheckerEmailHtml(payload) {
+  const safe = (s) =>
+    String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+
+  const rows = [
+    ['Name', payload.fullName],
+    ['Email', payload.email],
+    ['Phone', payload.phone || '—'],
+    ['Nationality', payload.nationalityName],
+    ['Residence', payload.residenceName],
+    ['UAE visa type', payload.uaeVisaType],
+    ['Destination', payload.destinationName],
+    ['Travel purpose', payload.travelPurpose],
+    ['Travel date', payload.travelDate],
+    ['Traveler type', payload.travelerType],
+    ['Previous rejection', payload.previousRejection === 'yes' ? 'Yes' : 'No'],
+  ]
+
+  const tableRows = rows
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:8px 0;color:#6b7280;width:140px;">${safe(label)}</td><td style="padding:8px 0;font-weight:600;">${safe(value)}</td></tr>`,
+    )
+    .join('')
+
+  return `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Inter,Segoe UI,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;">
+    <tr><td style="background:linear-gradient(135deg,#f93e42,#ff6b6b);padding:24px 28px;">
+      <span style="font-weight:700;font-size:20px;color:#fff;">New Visa Checker lead</span>
+    </td></tr>
+    <tr><td style="padding:28px;">
+      <p style="margin:0 0 16px;color:#374151;font-size:15px;">A customer submitted the Visa Checker pre-check form. Review and send the checklist manually.</p>
+      <table width="100%" style="font-size:15px;color:#111827;">${tableRows}</table>
+    </td></tr>
+  </table>
+</body></html>`
+}
+
 function buildOtpEmailHtml(code) {
   return `
 <!DOCTYPE html>
@@ -179,6 +224,81 @@ app.post('/api/contact', async (req, res) => {
     console.error('[contact]', err)
     return res.status(500).json({
       error: 'Could not send your message. Please try WhatsApp or call us directly.',
+    })
+  }
+})
+
+})
+
+app.post('/api/visa-checker', async (req, res) => {
+  const fullName = String(req.body?.fullName ?? '').trim()
+  const email = String(req.body?.email ?? '')
+    .trim()
+    .toLowerCase()
+  const phone = String(req.body?.phone ?? '').trim()
+  const nationalityName = String(req.body?.nationalityName ?? '').trim()
+  const residenceName = String(req.body?.residenceName ?? '').trim()
+  const uaeVisaType = String(req.body?.uaeVisaType ?? '').trim()
+  const destinationName = String(req.body?.destinationName ?? '').trim()
+  const travelPurpose = String(req.body?.travelPurpose ?? '').trim()
+  const travelDate = String(req.body?.travelDate ?? '').trim()
+  const travelerType = String(req.body?.travelerType ?? '').trim()
+  const previousRejection = String(req.body?.previousRejection ?? '').trim()
+
+  if (!fullName) {
+    return res.status(400).json({ error: 'Full name is required.' })
+  }
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' })
+  }
+  if (!nationalityName || !residenceName || !destinationName) {
+    return res.status(400).json({ error: 'Please complete all required fields.' })
+  }
+  if (!travelDate) {
+    return res.status(400).json({ error: 'Travel date is required.' })
+  }
+
+  const mailer = getTransporter()
+  if (!mailer) {
+    return res.status(503).json({
+      error: 'Email service is not configured. Run npm run dev and add SMTP settings to .env',
+    })
+  }
+
+  const payload = {
+    fullName,
+    email,
+    phone,
+    nationalityName,
+    residenceName,
+    uaeVisaType,
+    destinationName,
+    travelPurpose,
+    travelDate,
+    travelerType,
+    previousRejection,
+  }
+
+  const from = process.env.SMTP_FROM || `"Superjet Global" <${process.env.SMTP_USER}>`
+
+  try {
+    await mailer.sendMail({
+      from,
+      to: CONTACT_TO,
+      replyTo: `"${fullName.replace(/"/g, '')}" <${email}>`,
+      subject: `[Visa Checker] ${destinationName} — ${nationalityName} passport`,
+      text: [
+        'New Visa Checker pre-check submission',
+        '',
+        ...Object.entries(payload).map(([k, v]) => `${k}: ${v}`),
+      ].join('\n'),
+      html: buildVisaCheckerEmailHtml(payload),
+    })
+    return res.json({ success: true })
+  } catch (err) {
+    console.error('[visa-checker]', err)
+    return res.status(500).json({
+      error: 'Could not submit your check. Please contact us on WhatsApp.',
     })
   }
 })

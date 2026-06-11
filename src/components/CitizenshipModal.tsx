@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ALL_CITIZENSHIPS,
   CITIZENSHIP_COUNT,
@@ -6,22 +6,11 @@ import {
   type CitizenshipEntry,
 } from '../data/citizenships'
 import { useCitizenship } from '../context/CitizenshipContext'
+import { ResidenceSelector } from './ResidenceSelector'
+import type { ResidencyStatus } from '../utils/visaRequirements'
 import { flagUrl } from '../utils/flags'
 
 const ACCENT = '#5057ea'
-
-function PencilIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"
-        stroke={ACCENT}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 function CitizenshipPill({
   entry,
@@ -33,7 +22,6 @@ function CitizenshipPill({
   onSelect: () => void
 }) {
   const [hovered, setHovered] = useState(false)
-
   return (
     <button
       type="button"
@@ -65,13 +53,7 @@ function CitizenshipPill({
         height={14}
         style={{ borderRadius: 2, objectFit: 'cover', flexShrink: 0 }}
       />
-      <span
-        style={{
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {entry.name}
       </span>
     </button>
@@ -82,13 +64,28 @@ export function CitizenshipModal() {
   const {
     citizenship,
     countryCode,
-    setCitizenship,
+    residenceCountry,
+    residenceCode,
+    residencyStatus,
+    saveProfile,
     closeCitizenshipModal,
     detectedCountryHint,
   } = useCitizenship()
-  const [editing, setEditing] = useState(false)
+
+  const [draftCitizenship, setDraftCitizenship] = useState(citizenship)
+  const [draftCode, setDraftCode] = useState(countryCode)
+  const [draftResidence, setDraftResidence] = useState(residenceCountry)
+  const [draftResidenceCode, setDraftResidenceCode] = useState(residenceCode)
+  const [draftStatus, setDraftStatus] = useState<ResidencyStatus>(residencyStatus)
   const [search, setSearch] = useState('')
-  const [inputFocused, setInputFocused] = useState(false)
+
+  useEffect(() => {
+    setDraftCitizenship(citizenship)
+    setDraftCode(countryCode)
+    setDraftResidence(residenceCountry)
+    setDraftResidenceCode(residenceCode)
+    setDraftStatus(residencyStatus)
+  }, [citizenship, countryCode, residenceCountry, residenceCode, residencyStatus])
 
   const popular = useMemo(() => getPopularCitizenships(), [])
   const filtered = useMemo(() => {
@@ -101,8 +98,8 @@ export function CitizenshipModal() {
 
   const showPopular = !search.trim()
 
-  const handleSelect = (entry: CitizenshipEntry) => {
-    setCitizenship(entry.name, entry.code)
+  const handleSave = () => {
+    saveProfile(draftCitizenship, draftCode, draftResidence, draftResidenceCode, draftStatus)
     closeCitizenshipModal()
   }
 
@@ -129,9 +126,9 @@ export function CitizenshipModal() {
           background: '#fff',
           borderRadius: 24,
           padding: 32,
-          maxWidth: 500,
+          maxWidth: 520,
           width: '90%',
-          maxHeight: '80vh',
+          maxHeight: '85vh',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -157,15 +154,11 @@ export function CitizenshipModal() {
           ×
         </button>
 
-        <h2
-          id="citizenship-modal-title"
-          style={{ margin: 0, fontWeight: 700, fontSize: 22, color: '#111' }}
-        >
-          Your Citizenship
+        <h2 id="citizenship-modal-title" style={{ margin: 0, fontWeight: 700, fontSize: 22, color: '#111' }}>
+          Your Travel Profile
         </h2>
         <p style={{ margin: '8px 0 0', color: '#666', fontSize: 14, lineHeight: 1.5, paddingRight: 24 }}>
-          This is the nationality on your passport. It determines your visa requirements and where you
-          can travel visa-free
+          Passport nationality, where you live, and your residency status determine visa requirements.
         </p>
         {detectedCountryHint && (
           <p style={{ margin: '8px 0 0', color: ACCENT, fontSize: 13, fontWeight: 500 }}>
@@ -173,92 +166,100 @@ export function CitizenshipModal() {
           </p>
         )}
 
-        <p style={{ margin: '20px 0 8px', color: '#888', fontSize: 13 }}>
-          I live in UAE and am a citizen of
-        </p>
-        <button
-          type="button"
-          onClick={() => setEditing((v) => !v)}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            border: `1.5px solid ${ACCENT}`,
-            borderRadius: 40,
-            padding: '8px 16px',
-            background: '#fff',
-            cursor: 'pointer',
-            alignSelf: 'flex-start',
-          }}
-        >
-          <img
-            src={flagUrl(countryCode, 20)}
-            alt=""
-            width={20}
-            height={14}
-            style={{ borderRadius: 2, objectFit: 'cover' }}
+        <div style={{ overflowY: 'auto', flex: 1, marginTop: 20, minHeight: 0 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#333' }}>
+            Your passport is from:
+          </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <img src={flagUrl(draftCode, 20)} alt="" width={20} height={14} style={{ borderRadius: 2 }} />
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{draftCitizenship}</span>
+          </div>
+
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search passport country"
+            style={{
+              width: '100%',
+              border: '1px solid #eee',
+              borderRadius: 12,
+              padding: '10px 14px',
+              fontSize: 14,
+              outline: 'none',
+              boxSizing: 'border-box',
+              marginBottom: 8,
+            }}
           />
-          <span style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{citizenship}</span>
-          <PencilIcon />
-        </button>
-
-        {(editing || search.length > 0) && (
-          <>
-            <p style={{ margin: '16px 0 8px', fontWeight: 700, fontSize: 14, color: '#111' }}>
-              Enter a new citizenship
-            </p>
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onFocus={() => setInputFocused(true)}
-              onBlur={() => setInputFocused(false)}
-              placeholder="Search for a country"
-              style={{
-                width: '100%',
-                border: `1px solid ${inputFocused ? ACCENT : '#eee'}`,
-                borderRadius: 12,
-                padding: '12px 16px',
-                fontSize: 14,
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-          </>
-        )}
-
-        <p style={{ margin: '16px 0 0', fontSize: 13, color: '#888' }}>
-          All citizenships{' '}
-          <span style={{ color: '#bbb' }}>[{CITIZENSHIP_COUNT}]</span>
-        </p>
-
-        <div style={{ overflowY: 'auto', flex: 1, marginTop: 12, minHeight: 0 }}>
-          {showPopular && (
+          <p style={{ margin: '0 0 4px', fontSize: 12, color: '#888' }}>
+            All citizenships <span style={{ color: '#bbb' }}>[{CITIZENSHIP_COUNT}]</span>
+          </p>
+          <div style={{ marginBottom: 20 }}>
+            {showPopular && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', margin: '-4px' }}>
+                {popular.map((entry) => (
+                  <CitizenshipPill
+                    key={entry.code}
+                    entry={entry}
+                    selected={entry.code === draftCode}
+                    onSelect={() => {
+                      setDraftCitizenship(entry.name)
+                      setDraftCode(entry.code)
+                    }}
+                  />
+                ))}
+              </div>
+            )}
             <div style={{ display: 'flex', flexWrap: 'wrap', margin: '-4px' }}>
-              {popular.map((entry) => (
+              {(showPopular
+                ? filtered.filter((c) => !popular.some((p) => p.code === c.code))
+                : filtered
+              ).map((entry) => (
                 <CitizenshipPill
                   key={entry.code}
                   entry={entry}
-                  selected={entry.code === countryCode}
-                  onSelect={() => handleSelect(entry)}
+                  selected={entry.code === draftCode}
+                  onSelect={() => {
+                    setDraftCitizenship(entry.name)
+                    setDraftCode(entry.code)
+                  }}
                 />
               ))}
             </div>
-          )}
-          <div style={{ display: 'flex', flexWrap: 'wrap', margin: '-4px' }}>
-            {(showPopular
-              ? filtered.filter((c) => !popular.some((p) => p.code === c.code))
-              : filtered
-            ).map((entry) => (
-              <CitizenshipPill
-                key={entry.code}
-                entry={entry}
-                selected={entry.code === countryCode}
-                onSelect={() => handleSelect(entry)}
-              />
-            ))}
+          </div>
+
+          <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 20, marginBottom: 20 }}>
+            <ResidenceSelector
+              residenceCountry={draftResidence}
+              residenceCode={draftResidenceCode}
+              residencyStatus={draftStatus}
+              onResidenceChange={(name, code) => {
+                setDraftResidence(name)
+                setDraftResidenceCode(code)
+              }}
+              onStatusChange={setDraftStatus}
+            />
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={handleSave}
+          style={{
+            width: '100%',
+            marginTop: 12,
+            padding: 14,
+            background: ACCENT,
+            color: '#fff',
+            border: 'none',
+            borderRadius: 12,
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          Save profile
+        </button>
       </div>
     </div>
   )

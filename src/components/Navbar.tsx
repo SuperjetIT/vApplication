@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { useCitizenship } from '../context/CitizenshipContext'
 import { flagUrl } from '../utils/flags'
@@ -100,7 +100,14 @@ export function Navbar({
   showTabs?: boolean
   showEvents?: boolean
 }) {
-  const { countryCode, citizenship, openCitizenshipModal } = useCitizenship()
+  const {
+    countryCode,
+    citizenship,
+    residenceCode,
+    residenceCountry,
+    openCitizenshipModal,
+  } = useCitizenship()
+  const [showProfileTooltip, setShowProfileTooltip] = useState(false)
   const tabsVisible = showTabs && !isMobile
   const tabStyle = (active: boolean): CSSProperties => ({
     display: 'inline-flex',
@@ -187,24 +194,79 @@ export function Navbar({
           gap: 10,
         }}
       >
-        <button
-          type="button"
-          onClick={openCitizenshipModal}
-          style={{
-            ...iconCircle,
-            overflow: 'hidden',
-          }}
-          aria-label={`Citizenship: ${citizenship}`}
-          title={`Citizenship: ${citizenship}`}
+        <div
+          style={{ position: 'relative' }}
+          onMouseEnter={() => setShowProfileTooltip(true)}
+          onMouseLeave={() => setShowProfileTooltip(false)}
         >
-          <img
-            src={flagUrl(countryCode, 40)}
-            alt=""
-            width={24}
-            height={18}
-            style={{ borderRadius: '50%', objectFit: 'cover', width: 24, height: 24 }}
-          />
-        </button>
+          <button
+            type="button"
+            onClick={openCitizenshipModal}
+            style={{
+              ...iconCircle,
+              overflow: 'visible',
+              width: 48,
+              position: 'relative',
+            }}
+            aria-label={`${citizenship} passport · Living in ${residenceCountry}`}
+          >
+            <img
+              src={flagUrl(residenceCode, 40)}
+              alt=""
+              width={28}
+              height={28}
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                width: 28,
+                height: 28,
+                border: '2px solid #fff',
+                zIndex: 0,
+              }}
+            />
+            <img
+              src={flagUrl(countryCode, 40)}
+              alt=""
+              width={32}
+              height={32}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                width: 32,
+                height: 32,
+                border: '2px solid #fff',
+                zIndex: 1,
+              }}
+            />
+          </button>
+          {showProfileTooltip && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: 8,
+                background: '#333',
+                color: '#fff',
+                fontSize: 11,
+                padding: '6px 10px',
+                borderRadius: 8,
+                whiteSpace: 'nowrap',
+                zIndex: 2000,
+              }}
+            >
+              {citizenship} passport · Living in {residenceCountry}
+            </div>
+          )}
+        </div>
 
         <a
           href="https://wa.me/971559641020"

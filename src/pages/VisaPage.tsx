@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { countries, getCountry, type Country, type VisaOption } from '../data/countries'
+import { Navbar } from '../components/Navbar'
+import { SiteFooter } from '../components/SiteFooter'
+import { useAuth } from '../context/AuthContext'
 import { useCitizenship } from '../context/CitizenshipContext'
+import { countries, getCountry, type Country, type VisaOption } from '../data/countries'
 import { flagUrl } from '../utils/flags'
-import { SiteLayout } from '../components/SiteLayout'
+import { getVisaRequirements } from '../utils/visaRequirements'
 
 const BRAND = '#f93e42'
-const BRAND_HOVER = '#d42e32'
-const TEXT = '#111827'
-const TEXT_MUTED = '#6b7280'
-const BORDER = '#e5e7eb'
-const MAX_W = 1280
+const ACCENT = '#5057ea'
+const MAX_W = 1200
 const EXPRESS_SURCHARGE = 50
-const DELIVERY_ACCENT = '#5057ea'
 
 const nearbyBySlug: Record<string, string[]> = {
   singapore: ['malaysia', 'indonesia', 'thailand', 'vietnam'],
@@ -34,33 +33,96 @@ const nearbyBySlug: Record<string, string[]> = {
   france: ['uk', 'canada', 'united-states', 'australia'],
 }
 
-const rejectionReasons = [
-  'Incomplete documents',
-  'Insufficient funds',
-  'Wrong visa type',
-  'Travel history issues',
+const REJECTION_REASONS = [
+  {
+    title: 'Incomplete Documents',
+    description: 'Missing or unclear documents are the top rejection reason',
+  },
+  {
+    title: 'Insufficient Bank Balance',
+    description: 'Embassy requires minimum balance proof for your trip duration',
+  },
+  {
+    title: 'Wrong Visa Category',
+    description: 'Applying for wrong visa type based on travel purpose',
+  },
+  {
+    title: 'Travel History Issues',
+    description: 'No prior international travel history can affect approval',
+  },
 ]
 
-const reviews = [
+const REVIEWS = [
   {
     initials: 'AK',
     name: 'Ahmed K.',
+    color: BRAND,
     text: 'Got my visa before the promised date. Smooth process and clear updates throughout.',
   },
   {
     initials: 'SM',
     name: 'Sara M.',
+    color: ACCENT,
     text: 'Best visa experience in the UAE. Upload once and they handled the rest perfectly.',
   },
   {
     initials: 'RJ',
     name: 'Ravi J.',
+    color: '#22c55e',
     text: 'Transparent pricing and fast support on WhatsApp. Highly recommend for families.',
   },
 ]
 
-function unsplashUrl(name: string) {
-  return `https://source.unsplash.com/1200x400/?${name.replace(/\s+/g, '+')},travel,landmark`
+type ServicePackage = {
+  id: string
+  name: string
+  price: number
+  popular: boolean
+  features: string[]
+  outline?: boolean
+  dark?: boolean
+}
+
+const SERVICE_PACKAGES: ServicePackage[] = [
+  {
+    id: 'basic',
+    name: 'Basic Guidance',
+    price: 99,
+    popular: false,
+    features: ['Visa checklist', 'Document review (1 round)', 'Email support'],
+    outline: true,
+  },
+  {
+    id: 'standard',
+    name: 'Standard Support',
+    price: 199,
+    popular: true,
+    features: [
+      'Everything in Basic',
+      'Full application preparation',
+      'WhatsApp support',
+      '2 document review rounds',
+    ],
+    outline: false,
+  },
+  {
+    id: 'premium',
+    name: 'Premium Concierge',
+    price: 349,
+    popular: false,
+    features: [
+      'Everything in Standard',
+      'Priority processing',
+      'Appointment booking',
+      'Rejection insurance',
+      'Dedicated case officer',
+    ],
+    dark: true,
+  },
+]
+
+function countryImageUrl(slug: string) {
+  return `https://picsum.photos/seed/${slug}/1400/600`
 }
 
 function parseFeeAed(fee: string): number {
@@ -88,10 +150,33 @@ function formatDeliveryDate(daysFromNow: number): string {
   return `${date} at ${time}`
 }
 
-function getValidityDisplay(option: VisaOption, country: Country): string {
-  if (country.visaType === 'Sticker') return option.validity
-  if (option.validity.includes('year') || option.validity === '365 days') return option.validity
-  return 'From date of issue'
+function getNearby(slug: string): Country[] {
+  const slugs = nearbyBySlug[slug]
+  if (slugs) {
+    return slugs.map((s) => getCountry(s)).filter((c): c is Country => Boolean(c)).slice(0, 4)
+  }
+  return countries.filter((c) => c.slug !== slug).slice(0, 4)
+}
+
+function getEligibilityBadge(
+  country: Country,
+  passportCountry: string,
+  residenceCountry: string,
+  residencyStatus: string,
+) {
+  const req = getVisaRequirements(
+    passportCountry,
+    residenceCountry,
+    residencyStatus,
+    country.slug,
+  )
+  if (!req.required || req.visaType === 'not_required') {
+    return { label: '✅ Visa Free Entry', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' }
+  }
+  if (req.visaType === 'not_eligible') {
+    return { label: '❌ Not Eligible', color: '#dc2626', bg: '#fff0f0', border: '#fecaca' }
+  }
+  return { label: '📋 Visa Required', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' }
 }
 
 function getOptionButtonLabel(option: VisaOption, countryName: string): string {
@@ -101,49 +186,109 @@ function getOptionButtonLabel(option: VisaOption, countryName: string): string {
   return `I want a ${option.label} for ${countryName}`
 }
 
-function getNearby(slug: string): Country[] {
-  const slugs = nearbyBySlug[slug]
-  if (slugs) {
-    return slugs
-      .map((s) => getCountry(s))
-      .filter((c): c is Country => Boolean(c))
-      .slice(0, 4)
-  }
-  return countries.filter((c) => c.slug !== slug).slice(0, 4)
-}
-
-function getLengthOfStay(validity: string): string {
-  if (validity === 'N/A' || validity === 'Not applicable') return '—'
-  return validity
-}
-
-function SectionAccent() {
+function SectionHeading({ title }: { title: string }) {
   return (
-    <div
-      style={{
-        width: 40,
-        height: 3,
-        background: BRAND,
-        borderRadius: 2,
-        marginBottom: 20,
-      }}
-    />
+    <div style={{ marginBottom: 24 }}>
+      <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#1a1a1a' }}>{title}</h2>
+      <div
+        style={{
+          width: 48,
+          height: 3,
+          background: BRAND,
+          borderRadius: 2,
+          marginTop: 8,
+        }}
+      />
+    </div>
   )
 }
 
-function SectionTitle({ children }: { children: string }) {
+function IconPassport() {
   return (
-    <h2
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+      <rect x="3" y="2" width="18" height="20" rx="2" />
+      <circle cx="12" cy="10" r="3" />
+      <path d="M6 21v-1a6 6 0 0 1 12 0v1" />
+    </svg>
+  )
+}
+
+function IconCalendar() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  )
+}
+
+function IconClock() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </svg>
+  )
+}
+
+function IconEntry() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" />
+    </svg>
+  )
+}
+
+function IconLocation() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  )
+}
+
+function IconMethod() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  )
+}
+
+function InfoPill({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div
       style={{
-        margin: '0 0 8px',
-        fontSize: 22,
-        fontWeight: 700,
-        color: TEXT,
-        letterSpacing: '-0.02em',
+        background: '#fff',
+        border: '1px solid #f0f0f0',
+        borderRadius: 16,
+        padding: 16,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
       }}
     >
-      {children}
-    </h2>
+      <span
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: '50%',
+          background: '#fff8f8',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </span>
+      <div>
+        <p style={{ margin: '0 0 2px', fontSize: 12, color: '#888' }}>{label}</p>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#111' }}>{value}</p>
+      </div>
+    </div>
   )
 }
 
@@ -151,167 +296,11 @@ function ShieldIcon({ color = BRAND, size = 20 }: { color?: string; size?: numbe
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
-        d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z"
+        d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
         stroke={color}
         strokeWidth="1.5"
         strokeLinejoin="round"
       />
-      <path d="M9 12l2 2 4-4" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function EditIcon() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"
-        stroke={BRAND}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function UploadIcon() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16"
-        stroke={BRAND}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function SendIcon() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"
-        stroke={BRAND}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function CheckIcon() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M20 6L9 17l-5-5"
-        stroke={BRAND}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function PersonIcon() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="8" r="4" stroke="#666" strokeWidth="1.5" />
-      <path
-        d="M5 20c0-3.866 3.134-7 7-7s7 3.134 7 7"
-        stroke="#666"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function MinusCircleIcon() {
-  return (
-    <svg width={28} height={28} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="12" r="10" stroke={BORDER} strokeWidth="1.5" />
-      <path d="M8 12h8" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function PlusCircleIcon() {
-  return (
-    <svg width={28} height={28} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="12" r="10" stroke={BORDER} strokeWidth="1.5" />
-      <path d="M12 8v8M8 12h8" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      width={20}
-      height={20}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden
-      style={{
-        flexShrink: 0,
-        transition: 'transform 0.25s ease',
-        transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-      }}
-    >
-      <path d="M6 9l6 6 6-6" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function LaurelIcon() {
-  return (
-    <svg width={32} height={32} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 3c-2 4-6 5-8 8 2-1 5-1 8 1-2-3-4-6-5-8-8 2 1 5 1 8-1-2-4-6-5-8-8z"
-        stroke={BRAND}
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-        opacity={0.7}
-      />
-    </svg>
-  )
-}
-
-function StarIcon({ filled }: { filled?: boolean }) {
-  return (
-    <svg width={14} height={14} viewBox="0 0 24 24" aria-hidden>
-      <path
-        d="M12 2l3 7h7l-5.5 4.5 2 7L12 17l-6.5 3.5 2-7L2 9h7l3-7z"
-        fill={filled ? '#fbbf24' : '#e5e7eb'}
-      />
-    </svg>
-  )
-}
-
-function TrustpilotIcon() {
-  return (
-    <svg width={20} height={20} viewBox="0 0 24 24" aria-hidden>
-      <rect width={24} height={24} rx={4} fill="#00b67a" />
-      <path d="M12 6l1.5 4.5H18l-3.7 2.7 1.4 4.5L12 15l-3.7 2.7 1.4-4.5L6 10.5h4.5L12 6z" fill="#fff" />
-    </svg>
-  )
-}
-
-function AppleIcon() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill={TEXT} aria-hidden>
-      <path d="M17.05 12.67c-.02-2.58 2.1-3.82 2.19-3.89-1.19-1.74-3.04-1.98-3.7-2.01-1.58-.16-3.08.93-3.88.93-.8 0-2.03-.9-3.34-.88-1.72.03-3.3 1-4.18 2.54-1.78 3.09-.46 7.67 1.28 10.18.85 1.23 1.86 2.61 3.19 2.56 1.28-.05 1.76-.83 3.3-.83 1.54 0 1.97.83 3.32.8 1.37-.02 2.24-1.25 3.08-2.49.97-1.42 1.37-2.8 1.39-2.87-.03-.01-2.67-1.02-2.7-4.05zM14.3 4.2c.7-.85 1.17-2.03 1.04-3.2-1.01.04-2.23.67-2.96 1.52-.65.75-1.22 1.95-1.07 3.1 1.13.09 2.28-.58 2.99-1.42z" />
-    </svg>
-  )
-}
-
-function PlayIcon() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden>
-      <path d="M8 5v14l11-7L8 5z" fill={BRAND} />
     </svg>
   )
 }
@@ -324,402 +313,77 @@ function WhatsAppIcon() {
   )
 }
 
-function InfoPill({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode
-  label: string
-  value: string
-}) {
-  return (
-    <div
-      style={{
-        flex: '1 1 140px',
-        minWidth: 140,
-        padding: '14px 16px',
-        background: '#f3f4f6',
-        borderRadius: 12,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>{icon}</div>
-      <p style={{ margin: '0 0 4px', fontSize: 11, color: TEXT_MUTED, textTransform: 'uppercase' }}>
-        {label}
-      </p>
-      <p
-        style={{
-          margin: 0,
-          fontSize: 15,
-          fontWeight: 700,
-          color: TEXT,
-          textDecoration: 'underline',
-          textUnderlineOffset: 3,
-        }}
-      >
-        {value}
-      </p>
-    </div>
-  )
-}
-
-function GuaranteedDeliverySection({
-  selectedOption,
-  deliveryTier,
-  setDeliveryTier,
-  isMobile,
-}: {
-  selectedOption: VisaOption
-  deliveryTier: 'standard' | 'express'
-  setDeliveryTier: (tier: 'standard' | 'express') => void
-  isMobile: boolean
-}) {
-  const maxDays = parseProcessingDaysMax(selectedOption.processingTime)
-  const minDays = parseProcessingDaysMin(selectedOption.processingTime)
-  const standardDate = formatDeliveryDate(maxDays)
-  const expressDate = formatDeliveryDate(Math.max(0, minDays - 1))
-  const hoursSooner = Math.max(24, (maxDays - Math.max(0, minDays - 1)) * 24)
-  const inDaysLabel =
-    maxDays === 0 ? 'Instant' : maxDays === minDays ? `in ${maxDays} days` : `in ${minDays}-${maxDays} days`
-
-  const cardBase: CSSProperties = {
-    borderRadius: 16,
-    border: '1px solid #eee',
-    padding: 16,
-    marginBottom: 12,
-    display: 'flex',
-    flexDirection: isMobile ? 'column' : 'row',
-    alignItems: isMobile ? 'stretch' : 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  }
-
-  return (
-    <section style={{ paddingBottom: 32, marginBottom: 32, borderBottom: `1px solid ${BORDER}` }}>
-      <SectionTitle>Get a Guaranteed Visa</SectionTitle>
-      <SectionAccent />
-      <div
-        style={{
-          ...cardBase,
-          border: deliveryTier === 'standard' ? `2px solid ${DELIVERY_ACCENT}` : '1px solid #eee',
-          background: deliveryTier === 'standard' ? '#fafbff' : '#fff',
-        }}
-      >
-        <div>
-          <span
-            style={{
-              display: 'inline-block',
-              fontSize: 11,
-              fontWeight: 600,
-              color: DELIVERY_ACCENT,
-              background: '#eef0ff',
-              padding: '4px 10px',
-              borderRadius: 20,
-              marginBottom: 10,
-            }}
-          >
-            {inDaysLabel}
-          </span>
-          <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 15, color: TEXT }}>{standardDate}</p>
-          <button
-            type="button"
-            style={{
-              border: 'none',
-              background: 'none',
-              padding: 0,
-              fontSize: 13,
-              color: TEXT_MUTED,
-              cursor: 'pointer',
-            }}
-          >
-            View Timeline ↓
-          </button>
-        </div>
-        {deliveryTier === 'standard' ? (
-          <button
-            type="button"
-            style={{
-              alignSelf: isMobile ? 'flex-start' : 'center',
-              border: 'none',
-              borderRadius: 20,
-              background: '#dcfce7',
-              color: '#15803d',
-              fontSize: 12,
-              fontWeight: 700,
-              padding: '8px 16px',
-              cursor: 'default',
-            }}
-          >
-            ✓ Selected
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setDeliveryTier('standard')}
-            style={{
-              alignSelf: isMobile ? 'flex-start' : 'center',
-              border: `1px solid ${BORDER}`,
-              borderRadius: 20,
-              background: '#fff',
-              color: TEXT,
-              fontSize: 12,
-              fontWeight: 600,
-              padding: '8px 16px',
-              cursor: 'pointer',
-            }}
-          >
-            Select
-          </button>
-        )}
-      </div>
-      <div
-        style={{
-          ...cardBase,
-          marginBottom: 0,
-          border: deliveryTier === 'express' ? `2px solid ${DELIVERY_ACCENT}` : '1px solid #eee',
-          background: deliveryTier === 'express' ? '#fafbff' : '#fff',
-        }}
-      >
-        <div>
-          <span
-            style={{
-              display: 'inline-block',
-              fontSize: 11,
-              fontWeight: 600,
-              color: TEXT_MUTED,
-              background: '#f3f4f6',
-              padding: '4px 10px',
-              borderRadius: 20,
-              marginBottom: 10,
-            }}
-          >
-            {hoursSooner} hours sooner
-          </span>
-          <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 15, color: TEXT }}>{expressDate}</p>
-          <button
-            type="button"
-            style={{
-              border: 'none',
-              background: 'none',
-              padding: 0,
-              fontSize: 13,
-              color: TEXT_MUTED,
-              cursor: 'pointer',
-            }}
-          >
-            View Timeline ↓
-          </button>
-        </div>
-        {deliveryTier === 'express' ? (
-          <button
-            type="button"
-            style={{
-              alignSelf: isMobile ? 'flex-start' : 'center',
-              border: 'none',
-              borderRadius: 20,
-              background: '#dcfce7',
-              color: '#15803d',
-              fontSize: 12,
-              fontWeight: 700,
-              padding: '8px 16px',
-              cursor: 'default',
-            }}
-          >
-            ✓ Selected
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setDeliveryTier('express')}
-            style={{
-              alignSelf: isMobile ? 'flex-start' : 'center',
-              border: `1px solid ${BORDER}`,
-              borderRadius: 20,
-              background: '#fff',
-              color: TEXT,
-              fontSize: 12,
-              fontWeight: 600,
-              padding: '8px 16px',
-              cursor: 'pointer',
-            }}
-          >
-            Select
-          </button>
-        )}
-      </div>
-    </section>
-  )
-}
-
-function PaymentSidebar({
+function PaymentBox({
   country,
-  selectedOption,
   selectedOptionId,
   setSearchParams,
   travelers,
   setTravelers,
   expressExtra,
   total,
+  govFee,
+  processingFeeNum,
+  processingDate,
   isMobile,
   applyHover,
   setApplyHover,
   onApply,
 }: {
   country: Country
-  selectedOption: VisaOption
   selectedOptionId: string
   setSearchParams: ReturnType<typeof useSearchParams>[1]
   travelers: number
   setTravelers: (n: number) => void
   expressExtra: number
   total: number
+  govFee: number
+  processingFeeNum: number
+  processingDate: string
   isMobile: boolean
   applyHover: boolean
   setApplyHover: (v: boolean) => void
   onApply: () => void
 }) {
-  const stickyWrap: CSSProperties = isMobile
-    ? {}
-    : { position: 'sticky', top: 80, alignSelf: 'flex-start' }
-  const hasMultipleOptions = country.visaOptions.length > 1
+  const hasMultiple = country.visaOptions.length > 1
+  const otherOption = country.visaOptions.find((o) => o.id !== selectedOptionId)
 
   return (
-    <div style={{ ...stickyWrap, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div
+      style={{
+        width: '100%',
+        maxWidth: 380,
+        ...(isMobile ? {} : { position: 'sticky', top: 80, alignSelf: 'flex-start' }),
+      }}
+    >
       <div
         style={{
           background: '#fff',
-          borderRadius: 20,
+          borderRadius: 24,
           boxShadow: '0 8px 40px rgba(0,0,0,0.10)',
-          border: '1px solid #eee',
-          padding: 24,
+          overflow: 'hidden',
         }}
       >
         <div
           style={{
+            background: 'linear-gradient(135deg, #eef4ff, #e8f0fe)',
+            padding: '14px 20px',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: 10,
-            background: '#eef4ff',
-            borderRadius: 12,
-            padding: 12,
-            marginBottom: 16,
           }}
         >
-          <ShieldIcon color="#2563eb" />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', lineHeight: 1.4 }}>
-            Visa Guaranteed on {country.guaranteedDate}
-          </span>
-        </div>
-
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <p style={{ margin: 0, fontSize: 32, fontWeight: 700, color: TEXT }}>{selectedOption.fee}</p>
-          <p
-            style={{
-              margin: '6px 0 0',
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: '0.08em',
-              color: TEXT_MUTED,
-              textTransform: 'uppercase',
-            }}
-          >
-            TO BE PAID NOW
-          </p>
-        </div>
-
-        <div style={{ fontSize: 14, color: TEXT_MUTED, marginBottom: 16 }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              marginBottom: 12,
-            }}
-          >
-            <div>
-              <span style={{ fontWeight: 600, color: TEXT }}>Pay Now</span>
-              <p style={{ margin: '4px 0 0', fontSize: 11, color: TEXT_MUTED }}>Government Fees</p>
-            </div>
-            <span style={{ color: TEXT, fontWeight: 700 }}>{selectedOption.fee}</span>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-            }}
-          >
-            <div>
-              <span style={{ fontWeight: 600, color: TEXT }}>Pay on approval</span>
-              <p style={{ margin: '4px 0 0', fontSize: 11, color: TEXT_MUTED }}>Processing Fee</p>
-            </div>
-            <span style={{ color: TEXT, fontWeight: 700 }}>{selectedOption.processingFee}</span>
-          </div>
-          {expressExtra > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginTop: 12,
-              }}
-            >
-              <span>Express delivery</span>
-              <span style={{ color: TEXT, fontWeight: 500 }}>AED {expressExtra}</span>
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 20,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <PersonIcon />
-            <span style={{ fontWeight: 600, fontSize: 14, color: TEXT }}>Travelers</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button
-              type="button"
-              aria-label="Decrease travelers"
-              onClick={() => setTravelers(Math.max(1, travelers - 1))}
-              style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}
-            >
-              <MinusCircleIcon />
-            </button>
-            <span style={{ fontWeight: 700, fontSize: 16, minWidth: 24, textAlign: 'center' }}>
-              {travelers}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ShieldIcon color={ACCENT} />
+            <span style={{ color: ACCENT, fontWeight: 600, fontSize: 14 }}>
+              Guaranteed by {processingDate}
             </span>
-            <button
-              type="button"
-              aria-label="Increase travelers"
-              onClick={() => setTravelers(Math.min(10, travelers + 1))}
-              style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}
-            >
-              <PlusCircleIcon />
-            </button>
           </div>
+          <span style={{ color: '#888', fontSize: 12 }}>⚡ 1 day faster option</span>
         </div>
 
-        <div
-          style={{
-            borderTop: `1px solid ${BORDER}`,
-            paddingTop: 14,
-            marginBottom: hasMultipleOptions ? 16 : 20,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <span style={{ fontWeight: 700, fontSize: 15, color: TEXT }}>Total Amount</span>
-          <span style={{ fontWeight: 700, fontSize: 18, color: BRAND }}>AED {total}</span>
-        </div>
-
-        {hasMultipleOptions && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+        {hasMultiple && (
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f5f5f5' }}>
             {country.visaOptions.map((option) => {
               const selected = option.id === selectedOptionId
               return (
@@ -729,22 +393,89 @@ function PaymentSidebar({
                   onClick={() => setSearchParams({ option: option.id }, { replace: true })}
                   style={{
                     width: '100%',
+                    marginBottom: 8,
                     padding: 12,
                     borderRadius: 40,
                     fontSize: 14,
                     fontWeight: 600,
                     cursor: 'pointer',
+                    fontFamily: 'inherit',
                     background: selected ? BRAND : '#fff',
                     color: selected ? '#fff' : '#333',
                     border: selected ? 'none' : '1px solid #ddd',
                   }}
                 >
-                  {getOptionButtonLabel(option, country.name)}
+                  {option.label}
                 </button>
               )
             })}
           </div>
         )}
+
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid #f5f5f5',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <circle cx="12" cy="8" r="4" stroke="#666" strokeWidth="1.5" />
+            <path d="M5 20c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke="#666" strokeWidth="1.5" />
+          </svg>
+          <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>Travelers</span>
+          <button
+            type="button"
+            onClick={() => setTravelers(Math.max(1, travelers - 1))}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              border: '1px solid #ddd',
+              background: '#fafafa',
+              cursor: 'pointer',
+              fontSize: 18,
+              lineHeight: 1,
+            }}
+          >
+            −
+          </button>
+          <span style={{ fontWeight: 700, fontSize: 18, minWidth: 24, textAlign: 'center' }}>{travelers}</span>
+          <button
+            type="button"
+            onClick={() => setTravelers(Math.min(10, travelers + 1))}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              border: 'none',
+              background: BRAND,
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: 18,
+              lineHeight: 1,
+            }}
+          >
+            +
+          </button>
+        </div>
+
+        <div style={{ padding: 20, textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: 36, fontWeight: 700, color: '#1a1a1a' }}>AED {total}</p>
+          <p
+            style={{
+              margin: '6px 0 0',
+              fontSize: 11,
+              letterSpacing: '0.1em',
+              color: '#888',
+              fontWeight: 600,
+            }}
+          >
+            TO BE PAID NOW
+          </p>
+        </div>
 
         <button
           type="button"
@@ -752,81 +483,149 @@ function PaymentSidebar({
           onMouseEnter={() => setApplyHover(true)}
           onMouseLeave={() => setApplyHover(false)}
           style={{
-            width: '100%',
+            display: 'block',
+            width: 'calc(100% - 40px)',
+            margin: '0 20px 12px',
             padding: 16,
-            border: 'none',
-            borderRadius: 40,
-            background: applyHover ? BRAND_HOVER : BRAND,
+            background: 'linear-gradient(135deg, #f93e42, #ff6b6b)',
             color: '#fff',
+            borderRadius: 16,
+            border: 'none',
             fontSize: 16,
             fontWeight: 700,
             cursor: 'pointer',
-            transform: applyHover ? 'scale(1.02)' : 'scale(1)',
-            transition: 'background 0.2s ease, transform 0.2s ease',
+            fontFamily: 'inherit',
+            boxShadow: applyHover
+              ? '0 12px 32px rgba(249,62,66,0.45)'
+              : '0 8px 24px rgba(249,62,66,0.35)',
+            transform: applyHover ? 'translateY(-2px)' : 'translateY(0)',
+            transition: 'transform 0.2s, box-shadow 0.2s',
           }}
         >
           Start Application
         </button>
+
+        {hasMultiple && otherOption && (
+          <button
+            type="button"
+            onClick={() => setSearchParams({ option: otherOption.id }, { replace: true })}
+            style={{
+              display: 'block',
+              width: 'calc(100% - 40px)',
+              margin: '0 20px 16px',
+              padding: 12,
+              background: '#fff',
+              border: '1px solid #eee',
+              borderRadius: 16,
+              color: '#666',
+              fontSize: 14,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {getOptionButtonLabel(otherOption, country.name)}
+          </button>
+        )}
+
+        <div style={{ padding: '16px 20px', borderTop: '1px solid #f5f5f5', fontSize: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div>
+              <span style={{ fontWeight: 600, color: '#111' }}>Pay Now</span>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#888' }}>Government Fees</p>
+            </div>
+            <span style={{ fontWeight: 700 }}>AED {govFee * travelers}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div>
+              <span style={{ fontWeight: 600, color: '#111' }}>Pay on approval</span>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#888' }}>Processing Fee</p>
+            </div>
+            <span style={{ fontWeight: 700 }}>AED {processingFeeNum * travelers}</span>
+          </div>
+          {expressExtra > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span>Express delivery</span>
+              <span style={{ fontWeight: 700 }}>AED {expressExtra * travelers}</span>
+            </div>
+          )}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              borderTop: '1px solid #f5f5f5',
+              paddingTop: 14,
+              marginTop: 4,
+            }}
+          >
+            <span style={{ fontWeight: 700 }}>Total Amount</span>
+            <span style={{ fontWeight: 700, fontSize: 18, color: BRAND }}>AED {total}</span>
+          </div>
+        </div>
       </div>
 
       <div
         style={{
-          background: 'linear-gradient(135deg,#1a1a2e,#2d2d5e)',
-          borderRadius: 16,
-          padding: 16,
+          marginTop: 16,
+          background: 'linear-gradient(135deg, #1a1a2e, #2d2d5e)',
+          borderRadius: 20,
+          padding: 20,
           color: '#fff',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <ShieldIcon color="#fff" />
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Super Protect</span>
+          <span style={{ fontWeight: 700 }}>Super Protect</span>
           <span
             style={{
               marginLeft: 'auto',
-              fontSize: 11,
-              fontWeight: 600,
               background: '#22c55e',
               color: '#fff',
-              padding: '4px 10px',
               borderRadius: 20,
+              padding: '4px 10px',
+              fontSize: 11,
+              fontWeight: 600,
             }}
           >
             Included
           </span>
         </div>
-        <p style={{ margin: '0 0 6px', fontSize: 13, opacity: 0.9 }}>If Visa Delayed — No Superjet Global Fee</p>
-        <p style={{ margin: 0, fontSize: 13, opacity: 0.9 }}>If Rejected — 100% Refund</p>
+        <p style={{ margin: '0 0 6px', fontSize: 13, opacity: 0.95 }}>
+          If Visa Delayed — No Superjet Global Fee
+        </p>
+        <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>
+          If Rejected — third-party provider terms apply; contact us for Super Protect coverage details.
+        </p>
       </div>
 
       <div
         style={{
+          marginTop: 12,
+          background: '#fff',
+          borderRadius: 16,
+          padding: 16,
           display: 'flex',
-          alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 12,
-          padding: '4px 0',
+          alignItems: 'center',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
         }}
       >
         <div>
-          <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 14, color: TEXT }}>Have Queries?</p>
-          <p style={{ margin: 0, fontSize: 12, color: TEXT_MUTED }}>Documents, process, price, etc.</p>
+          <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 14 }}>Have Queries?</p>
+          <p style={{ margin: 0, fontSize: 12, color: '#888' }}>Documents, process, price, etc.</p>
         </div>
         <a
           href="https://wa.me/971559641020"
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="WhatsApp"
           style={{
-            width: 48,
-            height: 48,
+            width: 40,
+            height: 40,
             borderRadius: '50%',
-            background: 'linear-gradient(135deg,#25d366,#128c7e)',
+            background: 'linear-gradient(135deg, #25d366, #128c7e)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            flexShrink: 0,
             textDecoration: 'none',
-            boxShadow: '0 4px 12px rgba(37,211,102,0.35)',
           }}
         >
           <WhatsAppIcon />
@@ -841,23 +640,26 @@ export default function VisaPage() {
   const country = countrySlug ? getCountry(countrySlug) : undefined
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { citizenship, countryCode } = useCitizenship()
-  const [passportCitizenship, setPassportCitizenship] = useState(citizenship)
+  const {
+    citizenship,
+    countryCode,
+    residenceCountry,
+    residenceCode,
+    residencyStatus,
+    openCitizenshipModal,
+  } = useCitizenship()
+  const { isLoggedIn, avatarInitials, avatarColor } = useAuth()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const [travelers, setTravelers] = useState(1)
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [applyHover, setApplyHover] = useState(false)
-  const [deliveryTier, setDeliveryTier] = useState<'standard' | 'express'>('standard')
+  const [selectedDelivery, setSelectedDelivery] = useState<1 | 2>(1)
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768)
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
-
-  useEffect(() => {
-    setPassportCitizenship(citizenship)
-  }, [citizenship, countryCode])
 
   const selectedOption = useMemo(() => {
     if (!country) return undefined
@@ -876,18 +678,25 @@ export default function VisaPage() {
   }, [country, searchParams, setSearchParams])
 
   useEffect(() => {
-    setDeliveryTier('standard')
+    setSelectedDelivery(1)
   }, [selectedOptionId])
 
-  const nearby = useMemo(
-    () => (country ? getNearby(country.slug) : []),
-    [country],
-  )
+  const nearby = useMemo(() => (country ? getNearby(country.slug) : []), [country])
+  const eligibility = country
+    ? getEligibilityBadge(country, citizenship, residenceCountry, residencyStatus)
+    : null
 
   const govFee = selectedOption ? parseFeeAed(selectedOption.fee) : 0
   const processingFeeNum = selectedOption ? parseFeeAed(selectedOption.processingFee) : 0
-  const expressExtra = deliveryTier === 'express' ? EXPRESS_SURCHARGE : 0
+  const expressExtra = selectedDelivery === 2 ? EXPRESS_SURCHARGE : 0
   const total = (govFee + processingFeeNum + expressExtra) * travelers
+
+  const maxDays = selectedOption ? parseProcessingDaysMax(selectedOption.processingTime) : 5
+  const minDays = selectedOption ? parseProcessingDaysMin(selectedOption.processingTime) : 3
+  const standardDate = formatDeliveryDate(maxDays)
+  const expressDate = formatDeliveryDate(Math.max(0, minDays - 1))
+  const inDaysLabel =
+    maxDays === 0 ? 'Instant' : maxDays === minDays ? `in ${maxDays} days` : `in ${minDays}-${maxDays} days`
 
   const faqs = useMemo(() => {
     if (!country) return []
@@ -919,668 +728,876 @@ export default function VisaPage() {
     ]
   }, [country, selectedOption])
 
-  const steps = [
-    { num: 1, title: 'Fill Application', desc: 'Complete your details online in minutes.', icon: <EditIcon /> },
-    { num: 2, title: 'Upload Documents', desc: 'Submit passport and required files securely.', icon: <UploadIcon /> },
-    { num: 3, title: 'We Submit', desc: 'Our experts file with the embassy for you.', icon: <SendIcon /> },
-    { num: 4, title: 'Visa Delivered', desc: 'Receive your visa on time, guaranteed.', icon: <CheckIcon /> },
+  const processSteps = [
+    { title: 'Fill Application', desc: 'Complete your personal details and travel information' },
+    { title: 'Upload Documents', desc: 'Submit required documents through our secure portal' },
+    { title: 'Expert Review', desc: 'Our visa experts verify and prepare your application' },
+    { title: 'Visa Delivered', desc: 'Receive your visa before your travel date, guaranteed' },
   ]
 
-  const sectionBlock: CSSProperties = {
-    paddingBottom: 32,
-    marginBottom: 32,
-    borderBottom: `1px solid ${BORDER}`,
-  }
+  const sectionGap: CSSProperties = { marginTop: 40 }
 
   if (!country) {
     return (
-      <SiteLayout>
-        <main
-          style={{
-            maxWidth: MAX_W,
-            margin: '0 auto',
-            padding: isMobile ? '24px 16px' : '48px 32px',
-            textAlign: 'center',
-          }}
-        >
-          <h1 style={{ margin: '0 0 12px', fontSize: '1.75rem', fontWeight: 700, color: TEXT }}>
-            Country not found
-          </h1>
-          <p style={{ margin: '0 0 24px', color: TEXT_MUTED }}>We couldn&apos;t find visa information for this destination.</p>
-          <Link to="/" style={{ color: BRAND, fontWeight: 600, textDecoration: 'none', fontSize: 14 }}>
-            ← All countries
+      <div style={{ minHeight: '100vh', background: '#fafafa' }}>
+        <Navbar isMobile={isMobile} isLoggedIn={isLoggedIn} avatarInitials={avatarInitials} avatarColor={avatarColor} />
+        <main style={{ maxWidth: MAX_W, margin: '0 auto', padding: 48, textAlign: 'center' }}>
+          <h1 style={{ margin: '0 0 12px', fontSize: 28, fontWeight: 700 }}>Country not found</h1>
+          <p style={{ color: '#666', marginBottom: 24 }}>We couldn&apos;t find visa information for this destination.</p>
+          <Link to="/" style={{ color: BRAND, fontWeight: 600, textDecoration: 'none' }}>
+            ← All Destinations
           </Link>
         </main>
-      </SiteLayout>
+        <SiteFooter isMobile={isMobile} />
+      </div>
     )
   }
 
-  if (!selectedOption) {
-    return null
-  }
+  if (!selectedOption) return null
 
-  const paymentProps = {
-    country,
-    selectedOption,
-    selectedOptionId,
-    setSearchParams,
-    travelers,
-    setTravelers,
-    expressExtra,
-    total,
-    isMobile,
-    applyHover,
-    setApplyHover,
-    onApply: () => {
-      navigate(
-        `/apply?destination=${encodeURIComponent(country.slug)}&option=${encodeURIComponent(selectedOptionId)}&step=travelers`,
-      )
-    },
-  }
+  const paymentBox = (
+    <PaymentBox
+      country={country}
+      selectedOptionId={selectedOptionId}
+      setSearchParams={setSearchParams}
+      travelers={travelers}
+      setTravelers={setTravelers}
+      expressExtra={expressExtra}
+      total={total}
+      govFee={govFee}
+      processingFeeNum={processingFeeNum}
+      processingDate={standardDate}
+      isMobile={isMobile}
+      applyHover={applyHover}
+      setApplyHover={setApplyHover}
+      onApply={() =>
+        navigate(
+          `/apply?destination=${encodeURIComponent(country.slug)}&option=${encodeURIComponent(selectedOptionId)}&step=personal`,
+        )
+      }
+    />
+  )
 
-  return (
-    <SiteLayout>
-      <style>{`
-        .visa-reviews-scroll {
-          display: flex;
-          gap: 16px;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-          padding-bottom: 8px;
-        }
-        .visa-reviews-scroll::-webkit-scrollbar { height: 6px; }
-        .visa-reviews-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
-        .visa-nearby-scroll {
-          display: flex;
-          gap: 12px;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-          padding-bottom: 8px;
-        }
-        .visa-nearby-scroll::-webkit-scrollbar { display: none; }
-      `}</style>
-
-      <main style={{ background: '#fff' }}>
+  const leftContent = (
+    <div style={{ paddingTop: 32, paddingRight: isMobile ? 0 : 32 }}>
+      <section>
+        <SectionHeading title={`${country.name} Visa Information`} />
         <div
           style={{
-            maxWidth: MAX_W,
-            margin: '0 auto',
-            padding: isMobile ? '20px 16px 48px' : '32px 32px 64px',
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+            gap: 12,
           }}
         >
-          <Link
-            to="/"
-            style={{
-              display: 'inline-block',
-              marginBottom: 20,
-              color: BRAND,
-              textDecoration: 'none',
-              fontWeight: 600,
-              fontSize: 14,
-            }}
-          >
-            ← All countries
-          </Link>
+          <InfoPill icon={<IconPassport />} label="Visa Type" value={country.visaType} />
+          <InfoPill icon={<IconCalendar />} label="Validity" value={selectedOption.validity} />
+          <InfoPill icon={<IconClock />} label="Processing" value={selectedOption.processingTime} />
+          <InfoPill icon={<IconEntry />} label="Entry" value={selectedOption.entry} />
+          <InfoPill icon={<IconLocation />} label="Ports" value={selectedOption.ports} />
+          <InfoPill icon={<IconMethod />} label="Method" value={selectedOption.method} />
+        </div>
+      </section>
 
-          <div
-            style={{
-              position: 'relative',
-              height: 400,
-              borderRadius: 16,
-              overflow: 'hidden',
-              marginBottom: isMobile ? 24 : 40,
-            }}
-          >
-            <img
-              src={unsplashUrl(country.name)}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
+      <section style={sectionGap}>
+        <SectionHeading title="Who Can Apply" />
+        <p style={{ margin: '0 0 20px', color: '#555', fontSize: 15, lineHeight: 1.8 }}>
+          {residenceCountry} residents with a {citizenship} passport can apply for a {country.name} visa
+          through Superjet Global. Whether you&apos;re planning a tourist trip, business visit, or family
+          reunion, we handle your complete application.
+        </p>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+            gap: 12,
+          }}
+        >
+          {[
+            { emoji: '🧑‍💼', title: 'Employed', desc: 'Salary certificate + NOC required' },
+            { emoji: '💼', title: 'Self Employed', desc: 'Trade licence + bank statement' },
+            { emoji: '👨‍👩‍👧', title: 'Family', desc: 'Sponsor documents required' },
+          ].map((c) => (
             <div
+              key={c.title}
               style={{
-                position: 'absolute',
-                inset: 0,
-                background:
-                  'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                left: isMobile ? 16 : 24,
-                right: isMobile ? 16 : 24,
-                bottom: isMobile ? 16 : 24,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 16,
-                flexWrap: 'wrap',
+                borderRadius: 16,
+                padding: 20,
+                textAlign: 'center',
+                border: '1px solid #f0f0f0',
+                background: '#fff',
               }}
             >
-              <img
-                src={`https://flagcdn.com/w80/${country.countryCode}.png`}
-                alt=""
-                width={56}
-                height={40}
-                style={{ borderRadius: 6, objectFit: 'cover', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{c.emoji}</div>
+              <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 15 }}>{c.title}</p>
+              <p style={{ margin: 0, fontSize: 13, color: '#888' }}>{c.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section style={sectionGap}>
+        <SectionHeading title="Guaranteed Visa Delivery" />
+        <div
+          style={{
+            border: selectedDelivery === 1 ? `2px solid ${ACCENT}` : '1px solid #eee',
+            background: selectedDelivery === 1 ? '#fafbff' : '#fff',
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 12,
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            justifyContent: 'space-between',
+            alignItems: isMobile ? 'stretch' : 'center',
+            gap: 12,
+          }}
+        >
+          <div>
+            <span
+              style={{
+                display: 'inline-block',
+                background: '#eef4ff',
+                color: ACCENT,
+                borderRadius: 40,
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                marginBottom: 8,
+              }}
+            >
+              {inDaysLabel}
+            </span>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 18 }}>{standardDate}</p>
+            <span style={{ color: '#888', fontSize: 13 }}>View Timeline ↓</span>
+          </div>
+          <span
+            style={{
+              alignSelf: isMobile ? 'flex-start' : 'center',
+              background: '#22c55e',
+              color: '#fff',
+              borderRadius: 40,
+              padding: '6px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            ✓ Selected
+          </span>
+        </div>
+        <div
+          style={{
+            border: selectedDelivery === 2 ? `2px solid ${ACCENT}` : '1px solid #eee',
+            background: selectedDelivery === 2 ? '#fafbff' : '#fff',
+            borderRadius: 16,
+            padding: 20,
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            justifyContent: 'space-between',
+            alignItems: isMobile ? 'stretch' : 'center',
+            gap: 12,
+          }}
+        >
+          <div>
+            <span
+              style={{
+                display: 'inline-block',
+                background: '#f5f5f5',
+                color: '#888',
+                borderRadius: 40,
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                marginBottom: 8,
+              }}
+            >
+              36 hours sooner
+            </span>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 18 }}>{expressDate}</p>
+            <span style={{ color: '#888', fontSize: 13 }}>View Timeline ↓</span>
+          </div>
+          {selectedDelivery === 2 ? (
+            <span
+              style={{
+                alignSelf: isMobile ? 'flex-start' : 'center',
+                background: '#22c55e',
+                color: '#fff',
+                borderRadius: 40,
+                padding: '6px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              ✓ Selected
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSelectedDelivery(2)}
+              style={{
+                alignSelf: isMobile ? 'flex-start' : 'center',
+                border: '1px solid #ddd',
+                borderRadius: 40,
+                padding: '6px 16px',
+                fontSize: 13,
+                background: '#fff',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Select
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section style={sectionGap}>
+        <SectionHeading title="How Visa Process Works" />
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
+            gap: isMobile ? 24 : 8,
+            position: 'relative',
+          }}
+        >
+          {!isMobile &&
+            processSteps.slice(0, -1).map((_, i) => (
+              <div
+                key={`line-${i}`}
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: 16,
+                  left: `${12.5 + i * 25}%`,
+                  width: '25%',
+                  borderTop: '2px dashed #f0d0d0',
+                }}
               />
-              <div>
-                <h1
-                  style={{
-                    margin: '0 0 8px',
-                    color: '#fff',
-                    fontSize: isMobile ? '1.5rem' : '2rem',
-                    fontWeight: 700,
-                    letterSpacing: '-0.02em',
-                  }}
-                >
-                  {country.name}
-                </h1>
+            ))}
+          {processSteps.map((step, i) => (
+            <div key={step.title} style={{ position: 'relative', zIndex: 1 }}>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  background: BRAND,
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {i + 1}
+              </div>
+              <p style={{ margin: '12px 0 4px', fontWeight: 700, fontSize: 15 }}>{step.title}</p>
+              <p style={{ margin: 0, fontSize: 13, color: '#888', lineHeight: 1.5 }}>{step.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section style={sectionGap}>
+        <SectionHeading title="Documents Required" />
+        {(country.documents.length > 0 ? country.documents : ['Passport', 'Photo']).map((doc) => (
+          <div
+            key={doc}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '12px 0',
+              borderBottom: '1px solid #f5f5f5',
+            }}
+          >
+            <span
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: '#f0fdf4',
+                color: '#16a34a',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              ✓
+            </span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{doc}</span>
+          </div>
+        ))}
+        <div
+          style={{
+            marginTop: 16,
+            background: '#f0fff4',
+            border: '1px solid #c3e6cb',
+            borderRadius: 12,
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            color: '#16a34a',
+            fontSize: 13,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <rect x="5" y="11" width="14" height="10" rx="2" stroke="#16a34a" strokeWidth="1.5" />
+            <path d="M8 11V7a4 4 0 118 0v4" stroke="#16a34a" strokeWidth="1.5" />
+          </svg>
+          All documents are verified by our experts before submission
+        </div>
+      </section>
+
+      <section style={sectionGap}>
+        <SectionHeading title="Service Packages" />
+        <p style={{ margin: '0 0 24px', color: '#888', fontSize: 15 }}>
+          Choose the support level that works for you
+        </p>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+            gap: 16,
+          }}
+        >
+          {SERVICE_PACKAGES.map((pkg) => (
+            <div
+              key={pkg.id}
+              style={{
+                position: 'relative',
+                borderRadius: 20,
+                padding: 28,
+                border: pkg.popular ? `2px solid ${BRAND}` : '2px solid #eee',
+                background: '#fff',
+                overflow: 'hidden',
+              }}
+            >
+              {pkg.popular && (
                 <span
                   style={{
-                    display: 'inline-block',
-                    padding: '6px 14px',
-                    borderRadius: 20,
-                    background: 'rgba(255,255,255,0.2)',
-                    backdropFilter: 'blur(8px)',
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    background: BRAND,
                     color: '#fff',
-                    fontSize: 13,
+                    borderRadius: '0 20px 0 12px',
+                    padding: '6px 14px',
+                    fontSize: 12,
                     fontWeight: 600,
                   }}
                 >
-                  {country.visaType}
+                  Most Popular
                 </span>
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
-              gap: isMobile ? 28 : 40,
-              alignItems: 'flex-start',
-            }}
-          >
-            {isMobile && (
-              <div style={{ width: '100%', order: 0 }}>
-                <PaymentSidebar {...paymentProps} />
-              </div>
-            )}
-
-            <div style={{ flex: isMobile ? '1 1 100%' : '0 0 70%', maxWidth: isMobile ? '100%' : '70%', width: '100%' }}>
-              <div
+              )}
+              <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 16 }}>{pkg.name}</p>
+              <p style={{ margin: '0 0 16px', fontSize: 24, fontWeight: 800, color: BRAND }}>
+                AED {pkg.price}
+              </p>
+              <ul style={{ margin: '0 0 20px', paddingLeft: 18, fontSize: 14, color: '#666', lineHeight: 1.8 }}>
+                {pkg.features.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `/apply?destination=${country.slug}&option=${selectedOptionId}&step=personal&package=${pkg.id}`,
+                  )
+                }
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 12,
-                  marginBottom: 24,
-                  padding: '14px 18px',
-                  background: '#f9fafb',
+                  width: '100%',
+                  padding: '12px 16px',
                   borderRadius: 12,
-                  border: `1px solid ${BORDER}`,
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  border: pkg.dark ? 'none' : pkg.outline ? `2px solid ${BRAND}` : 'none',
+                  background: pkg.dark ? '#1a1a1a' : pkg.outline ? '#fff' : BRAND,
+                  color: pkg.dark ? '#fff' : pkg.outline ? BRAND : '#fff',
                 }}
               >
-                <span style={{ fontSize: 14, color: TEXT_MUTED, fontWeight: 500 }}>
-                  Passport citizenship
-                </span>
-                <div
+                Get Started
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section style={{ ...sectionGap, textAlign: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 8 }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path d="M12 3c-2 4-6 5-8 8 2-1 5-1 8 1-2-3-4-6-5-8-8 2 1 5 1 8-1-2-4-6-5-8-8z" stroke={BRAND} strokeWidth="1.2" opacity={0.7} />
+          </svg>
+          <h2 style={{ margin: 0, fontSize: isMobile ? 22 : 24, fontWeight: 700 }}>
+            4.5 ★ Rating Across All Platforms
+          </h2>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden style={{ transform: 'scaleX(-1)' }}>
+            <path d="M12 3c-2 4-6 5-8 8 2-1 5-1 8 1-2-3-4-6-5-8-8 2 1 5 1 8-1-2-4-6-5-8-8z" stroke={BRAND} strokeWidth="1.2" opacity={0.7} />
+          </svg>
+        </div>
+        <p style={{ margin: '0 0 12px', color: '#888' }}>
+          Highest rating for any visa platform in United Arab Emirates
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 32, marginBottom: 32, fontSize: 13, color: '#888' }}>
+          {['Trustpilot', 'App Store', 'Google Play'].map((p, i) => (
+            <span key={p}>
+              {i > 0 && <span style={{ marginRight: 32, color: '#ddd' }}>|</span>}
+              {p}
+            </span>
+          ))}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            gap: 16,
+            overflowX: isMobile ? 'auto' : 'visible',
+            flexWrap: isMobile ? 'nowrap' : 'wrap',
+            justifyContent: 'center',
+          }}
+        >
+          {REVIEWS.map((r) => (
+            <article
+              key={r.name}
+              style={{
+                flex: isMobile ? '0 0 280px' : '1 1 240px',
+                maxWidth: 320,
+                background: '#fff',
+                borderRadius: 20,
+                padding: 24,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                textAlign: 'left',
+              }}
+            >
+              <div style={{ color: '#fbbf24', fontSize: 18, letterSpacing: 2 }}>★★★★★</div>
+              <p style={{ margin: '12px 0 16px', color: '#444', fontSize: 15, lineHeight: 1.7 }}>
+                &ldquo;{r.text}&rdquo;
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span
                   style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    background: r.color,
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: 12,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 8,
-                    border: '1.5px solid #5057ea',
-                    borderRadius: 40,
-                    padding: '8px 16px',
-                    background: '#fff',
-                  }}
-                >
-                  <img
-                    src={flagUrl(countryCode, 20)}
-                    alt=""
-                    width={20}
-                    height={14}
-                    style={{ borderRadius: 2, objectFit: 'cover' }}
-                  />
-                  <span style={{ fontWeight: 600, fontSize: 14, color: TEXT }}>{passportCitizenship}</span>
-                </div>
-              </div>
-
-              <section style={sectionBlock}>
-                <SectionTitle>{`${country.name} Visa Information`}</SectionTitle>
-                <SectionAccent />
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  <InfoPill icon={<EditIcon />} label="Visa Type" value={country.visaType} />
-                  <InfoPill
-                    icon={<UploadIcon />}
-                    label="Length of Stay"
-                    value={getLengthOfStay(selectedOption.validity)}
-                  />
-                  <InfoPill
-                    icon={<SendIcon />}
-                    label="Validity"
-                    value={getValidityDisplay(selectedOption, country)}
-                  />
-                  <InfoPill icon={<CheckIcon />} label="Entry" value={selectedOption.entry} />
-                  <InfoPill icon={<PersonIcon />} label="Visa Accepted At" value={selectedOption.ports} />
-                  <InfoPill icon={<ShieldIcon />} label="Method" value={selectedOption.method} />
-                </div>
-              </section>
-
-              <GuaranteedDeliverySection
-                selectedOption={selectedOption}
-                deliveryTier={deliveryTier}
-                setDeliveryTier={setDeliveryTier}
-                isMobile={isMobile}
-              />
-
-              <section style={sectionBlock}>
-                <SectionTitle>How Visa Process Works</SectionTitle>
-                <SectionAccent />
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: isMobile ? 'column' : 'row',
-                    alignItems: isMobile ? 'stretch' : 'flex-start',
-                    gap: isMobile ? 20 : 8,
-                  }}
-                >
-                  {steps.map((step, idx) => (
-                    <div
-                      key={step.num}
-                      style={{
-                        flex: isMobile ? undefined : 1,
-                        display: 'flex',
-                        flexDirection: isMobile ? 'row' : 'column',
-                        alignItems: isMobile ? 'flex-start' : 'center',
-                        textAlign: isMobile ? 'left' : 'center',
-                        gap: isMobile ? 16 : 0,
-                        position: 'relative',
-                      }}
-                    >
-                      {idx < steps.length - 1 && !isMobile && (
-                        <div
-                          aria-hidden
-                          style={{
-                            position: 'absolute',
-                            top: 20,
-                            left: 'calc(50% + 28px)',
-                            width: 'calc(100% - 56px)',
-                            borderTop: '2px dashed #e5e7eb',
-                          }}
-                        />
-                      )}
-                      <div
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: '50%',
-                          background: BRAND,
-                          color: '#fff',
-                          fontWeight: 700,
-                          fontSize: 16,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                          marginBottom: isMobile ? 0 : 12,
-                        }}
-                      >
-                        {step.num}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ marginBottom: 8 }}>{step.icon}</div>
-                        <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 14, color: TEXT }}>
-                          {step.title}
-                        </p>
-                        <p style={{ margin: 0, fontSize: 12, color: TEXT_MUTED, lineHeight: 1.5 }}>
-                          {step.desc}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section style={sectionBlock}>
-                <SectionTitle>Will Your Visa Be Approved?</SectionTitle>
-                <SectionAccent />
-                <div
-                  style={{
-                    background: 'linear-gradient(135deg,#f0f4ff,#fff0f8)',
-                    borderRadius: 16,
-                    padding: isMobile ? 24 : 32,
-                    display: 'flex',
-                    flexDirection: isMobile ? 'column' : 'row',
-                    alignItems: isMobile ? 'flex-start' : 'center',
-                    justifyContent: 'space-between',
-                    gap: 20,
-                  }}
-                >
-                  <p style={{ margin: 0, fontSize: 17, fontWeight: 600, color: TEXT, maxWidth: 400 }}>
-                    Check your visa eligibility instantly
-                  </p>
-                  <Link
-                    to="/sign-in"
-                    style={{
-                      display: 'inline-block',
-                      padding: '12px 28px',
-                      background: BRAND,
-                      color: '#fff',
-                      borderRadius: 40,
-                      fontWeight: 600,
-                      fontSize: 15,
-                      textDecoration: 'none',
-                      flexShrink: 0,
-                    }}
-                  >
-                    Check Eligibility
-                  </Link>
-                </div>
-              </section>
-
-              <section style={sectionBlock}>
-                <SectionTitle>{`${country.name} Visa Rejection Reasons`}</SectionTitle>
-                <SectionAccent />
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
-                    gap: 12,
-                  }}
-                >
-                  {rejectionReasons.map((reason) => (
-                    <div
-                      key={reason}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        padding: '14px 16px',
-                        background: '#fff8f8',
-                        borderRadius: 10,
-                        borderLeft: `3px solid ${BRAND}`,
-                      }}
-                    >
-                      <ShieldIcon color={BRAND} size={18} />
-                      <span style={{ fontSize: 14, fontWeight: 500, color: TEXT }}>{reason}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section style={sectionBlock}>
-                <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 12,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <LaurelIcon />
-                    <span style={{ fontSize: isMobile ? 28 : 36, fontWeight: 800, color: TEXT }}>
-                      4.5 Rating Across All Platforms
-                    </span>
-                    <LaurelIcon />
-                  </div>
-                  <p style={{ margin: 0, fontSize: 14, color: TEXT_MUTED }}>
-                    Highest rating for any visa platform in United Arab Emirates
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    display: 'flex',
                     justifyContent: 'center',
-                    alignItems: 'center',
-                    gap: 0,
-                    marginBottom: 28,
-                    flexWrap: 'wrap',
                   }}
                 >
-                  {[
-                    { icon: <TrustpilotIcon />, name: 'Trustpilot' },
-                    { icon: <AppleIcon />, name: 'App Store' },
-                    { icon: <PlayIcon />, name: 'Google Play' },
-                  ].map((p, i) => (
-                    <div
-                      key={p.name}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '0 20px',
-                        borderRight: i < 2 ? `1px solid ${BORDER}` : 'none',
-                      }}
-                    >
-                      {p.icon}
-                      <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{p.name}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className={isMobile ? 'visa-reviews-scroll' : undefined}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 16,
-                      flexDirection: isMobile ? 'row' : 'row',
-                      flexWrap: isMobile ? 'nowrap' : 'wrap',
-                    }}
-                  >
-                    {reviews.map((r) => (
-                      <article
-                        key={r.name}
-                        style={{
-                          flex: isMobile ? '0 0 280px' : '1 1 240px',
-                          minWidth: isMobile ? 280 : 200,
-                          background: '#fff',
-                          borderRadius: 16,
-                          boxShadow: '0 2px 12px rgba(0,0,0,0.07)',
-                          padding: 20,
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                          <div
-                            style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: '50%',
-                              background: '#f3f4f6',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontWeight: 700,
-                              fontSize: 13,
-                              color: BRAND,
-                            }}
-                          >
-                            {r.initials}
-                          </div>
-                          <div>
-                            <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>{r.name}</p>
-                            <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
-                              {Array.from({ length: 5 }).map((_, i) => (
-                                <StarIcon key={i} filled />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: 13,
-                            color: TEXT_MUTED,
-                            lineHeight: 1.55,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {r.text}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                </div>
-              </section>
-
-              <section style={sectionBlock}>
-                <SectionTitle>FAQ</SectionTitle>
-                <SectionAccent />
+                  {r.initials}
+                </span>
                 <div>
-                  {faqs.map((faq, idx) => {
-                    const open = openFaq === idx
-                    return (
-                      <div key={faq.q} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                        <button
-                          type="button"
-                          onClick={() => setOpenFaq(open ? null : idx)}
-                          style={{
-                            width: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 16,
-                            padding: '16px 0',
-                            border: 'none',
-                            background: 'none',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
-                        >
-                          <span style={{ fontWeight: 700, fontSize: 15, color: TEXT }}>{faq.q}</span>
-                          <ChevronIcon open={open} />
-                        </button>
-                        <div
-                          style={{
-                            maxHeight: open ? 200 : 0,
-                            overflow: 'hidden',
-                            transition: 'max-height 0.3s ease',
-                          }}
-                        >
-                          <p
-                            style={{
-                              margin: '0 0 16px',
-                              fontSize: 14,
-                              color: TEXT_MUTED,
-                              lineHeight: 1.6,
-                            }}
-                          >
-                            {faq.a}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  <strong style={{ fontSize: 14 }}>{r.name}</strong>
+                  <p style={{ margin: 0, fontSize: 12, color: '#888' }}>UAE Resident</p>
                 </div>
-              </section>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
-              <section style={sectionBlock}>
-                <SectionTitle>Nearby Countries</SectionTitle>
-                <SectionAccent />
-                <div className="visa-nearby-scroll">
-                  {nearby.map((c) => (
-                    <Link
-                      key={c.slug}
-                      to={`/visa/${c.slug}`}
-                      style={{
-                        flex: '0 0 160px',
-                        width: 160,
-                        textDecoration: 'none',
-                        color: 'inherit',
-                        background: '#fff',
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: 12,
-                        padding: 12,
-                        display: 'block',
-                      }}
-                    >
-                      <img
-                        src={`https://flagcdn.com/w80/${c.countryCode}.png`}
-                        alt=""
-                        width={40}
-                        height={28}
-                        style={{ borderRadius: 4, objectFit: 'cover', marginBottom: 8 }}
-                      />
-                      <p style={{ margin: '0 0 6px', fontWeight: 600, fontSize: 13, color: TEXT }}>
-                        {c.name}
-                      </p>
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: BRAND,
-                          background: '#fff8f8',
-                          padding: '4px 8px',
-                          borderRadius: 20,
-                        }}
-                      >
-                        {c.visaType}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </section>
+      <section style={sectionGap}>
+        <SectionHeading title={`${country.name} Visa Rejection Reasons`} />
+        {REJECTION_REASONS.map((r) => (
+          <div
+            key={r.title}
+            style={{
+              borderLeft: `3px solid ${BRAND}`,
+              background: '#fff8f8',
+              borderRadius: '0 12px 12px 0',
+              padding: 16,
+              marginBottom: 12,
+            }}
+          >
+            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 14 }}>⚠ {r.title}</p>
+            <p style={{ margin: 0, fontSize: 13, color: '#888' }}>{r.description}</p>
+          </div>
+        ))}
+      </section>
 
-              <section style={{ marginBottom: 0 }}>
-                <SectionTitle>How We Reviewed This Page</SectionTitle>
-                <SectionAccent />
-                <div
+      <section style={sectionGap}>
+        <SectionHeading title="Frequently Asked Questions" />
+        {faqs.map((faq, idx) => {
+          const open = openFaq === idx
+          return (
+            <div
+              key={faq.q}
+              style={{ border: '1px solid #f0f0f0', borderRadius: 16, marginBottom: 12, overflow: 'hidden' }}
+            >
+              <button
+                type="button"
+                onClick={() => setOpenFaq(open ? null : idx)}
+                style={{
+                  width: '100%',
+                  padding: '20px 24px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  border: 'none',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ fontWeight: 700, fontSize: 15, color: '#1a1a1a' }}>{faq.q}</span>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden
                   style={{
-                    background: '#f3f4f6',
-                    borderRadius: 12,
-                    padding: 20,
+                    flexShrink: 0,
+                    transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s',
                   }}
                 >
-                  <p style={{ margin: '0 0 8px', fontSize: 14, color: TEXT, fontWeight: 600 }}>
-                    Last reviewed: June 2026
-                  </p>
-                  <p style={{ margin: '0 0 16px', fontSize: 13, color: TEXT_MUTED }}>
-                    Our visa experts verify all information monthly
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {['AR', 'MK', 'LS'].map((initials, i) => (
-                      <div
-                        key={initials}
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: '50%',
-                          background: ['#fde8e8', '#e8eeff', '#e8f5e9'][i],
-                          color: TEXT,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginLeft: i > 0 ? -8 : 0,
-                          border: '2px solid #fff',
-                        }}
-                      >
-                        {initials}
-                      </div>
-                    ))}
-                    <span style={{ fontSize: 13, fontWeight: 600, color: TEXT_MUTED, marginLeft: 4 }}>
-                      Superjet Global Research Team
-                    </span>
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            {!isMobile && (
-              <div style={{ flex: '0 0 30%', maxWidth: '30%', width: '100%' }}>
-                <PaymentSidebar {...paymentProps} />
+                  <path d="M6 9l6 6 6-6" stroke="#888" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <div
+                style={{
+                  padding: open ? '0 24px 20px' : '0 24px',
+                  maxHeight: open ? 500 : 0,
+                  overflow: 'hidden',
+                  transition: 'max-height 0.3s ease',
+                  color: '#666',
+                  fontSize: 15,
+                  lineHeight: 1.7,
+                }}
+              >
+                {faq.a}
               </div>
-            )}
+            </div>
+          )
+        })}
+      </section>
+
+      <section style={sectionGap}>
+        <SectionHeading title="Explore Similar Destinations" />
+        <div
+          style={{
+            display: 'flex',
+            gap: 12,
+            overflowX: 'auto',
+            paddingBottom: 8,
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {nearby.map((c) => (
+            <Link
+              key={c.slug}
+              to={`/visa/${c.slug}`}
+              style={{
+                flex: '0 0 160px',
+                width: 160,
+                textDecoration: 'none',
+                color: 'inherit',
+                background: '#fff',
+                border: '1px solid #f0f0f0',
+                borderRadius: 16,
+                padding: 16,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+              }}
+            >
+              <img
+                src={flagUrl(c.countryCode, 80)}
+                alt=""
+                width={40}
+                height={28}
+                style={{ borderRadius: 4, objectFit: 'cover', marginBottom: 10 }}
+              />
+              <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14 }}>{c.name}</p>
+              <span
+                style={{
+                  display: 'inline-block',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: BRAND,
+                  background: '#fff8f8',
+                  padding: '4px 8px',
+                  borderRadius: 20,
+                  marginBottom: 8,
+                }}
+              >
+                {c.visaType}
+              </span>
+              <p style={{ margin: 0, fontSize: 13, color: BRAND, fontWeight: 600 }}>View →</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section style={{ ...sectionGap, marginBottom: 40 }}>
+        <div
+          style={{
+            background: '#f8f8f8',
+            borderRadius: 16,
+            padding: 24,
+            display: 'flex',
+            gap: 16,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
+          <ShieldIcon color={ACCENT} size={32} />
+          <div>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 15 }}>How We Reviewed This Page</p>
+            <p style={{ margin: 0, color: '#666', fontSize: 13, lineHeight: 1.6 }}>
+              Last reviewed: June 2026 · Verified by Superjet Global visa experts · Information updated monthly
+            </p>
           </div>
         </div>
-      </main>
-    </SiteLayout>
+      </section>
+    </div>
+  )
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#fafafa', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <Navbar
+        activeTab="explore"
+        setActiveTab={() => {}}
+        isMobile={isMobile}
+        isLoggedIn={isLoggedIn}
+        avatarInitials={avatarInitials}
+        avatarColor={avatarColor}
+        showEvents={false}
+      />
+
+      {/* Hero */}
+      <div
+        style={{
+          position: 'relative',
+          height: isMobile ? 260 : 420,
+          overflow: 'hidden',
+          borderRadius: '0 0 32px 32px',
+        }}
+      >
+        <img
+          src={countryImageUrl(country.slug)}
+          alt=""
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.7) 100%)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 24,
+            right: isMobile ? 16 : 32,
+            display: 'flex',
+            gap: 10,
+          }}
+        >
+          {['Share', 'Save'].map((label) => (
+            <button
+              key={label}
+              type="button"
+              aria-label={label}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.15)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: '#fff',
+                cursor: 'pointer',
+                fontSize: 11,
+              }}
+            >
+              {label === 'Share' ? '↗' : '☆'}
+            </button>
+          ))}
+        </div>
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            padding: isMobile ? '24px 20px' : '40px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            style={{
+              border: 'none',
+              background: 'none',
+              color: '#fff',
+              opacity: 0.8,
+              fontSize: 14,
+              cursor: 'pointer',
+              padding: 0,
+              textAlign: 'left',
+              fontFamily: 'inherit',
+            }}
+          >
+            ← All Destinations
+          </button>
+          <img
+            src={flagUrl(country.countryCode, 80)}
+            alt=""
+            width={56}
+            height={40}
+            style={{
+              marginTop: 16,
+              borderRadius: 6,
+              objectFit: 'cover',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            }}
+          />
+          <h1
+            style={{
+              margin: '12px 0 10px',
+              color: '#fff',
+              fontSize: isMobile ? 28 : 48,
+              fontWeight: 800,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            {country.name}
+          </h1>
+          <span
+            style={{
+              display: 'inline-block',
+              width: 'fit-content',
+              background: 'rgba(249,62,66,0.9)',
+              color: '#fff',
+              borderRadius: 40,
+              padding: '6px 18px',
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            {country.visaType}
+          </span>
+        </div>
+      </div>
+
+      {/* Passport strip */}
+      <div
+        style={{
+          background: '#fff',
+          padding: isMobile ? '16px 20px' : '16px 40px',
+          borderBottom: '1px solid #f0f0f0',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ color: '#888', fontSize: 13 }}>Viewing for:</span>
+          <button
+            type="button"
+            onClick={openCitizenshipModal}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: '#fff8f8',
+              border: `1.5px solid ${BRAND}`,
+              borderRadius: 40,
+              padding: '8px 14px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: 600,
+              fontSize: 13,
+            }}
+          >
+            <img src={flagUrl(countryCode, 40)} alt="" width={22} height={15} style={{ borderRadius: 2, objectFit: 'cover' }} />
+            {citizenship} passport
+          </button>
+          <span style={{ color: '#ccc', fontSize: 13 }}>+</span>
+          <button
+            type="button"
+            onClick={openCitizenshipModal}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: '#f0f4ff',
+              border: `1.5px solid ${ACCENT}`,
+              borderRadius: 40,
+              padding: '8px 14px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: 600,
+              fontSize: 13,
+            }}
+          >
+            <img src={flagUrl(residenceCode, 40)} alt="" width={22} height={15} style={{ borderRadius: 2, objectFit: 'cover' }} />
+            Living in {residenceCountry}
+          </button>
+        </div>
+        {eligibility && (
+          <span
+            style={{
+              padding: '6px 14px',
+              borderRadius: 40,
+              fontSize: 13,
+              fontWeight: 600,
+              color: eligibility.color,
+              background: eligibility.bg,
+              border: `1px solid ${eligibility.border}`,
+            }}
+          >
+            {eligibility.label}
+          </span>
+        )}
+      </div>
+
+      {/* Two columns */}
+      <div
+        style={{
+          maxWidth: MAX_W,
+          margin: '0 auto',
+          padding: isMobile ? '0 16px 48px' : '0 32px 64px',
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          gap: isMobile ? 24 : 0,
+          alignItems: 'flex-start',
+        }}
+      >
+        {isMobile && paymentBox}
+        <div style={{ flex: isMobile ? '1 1 100%' : '0 0 65%', width: isMobile ? '100%' : '65%' }}>
+          {leftContent}
+        </div>
+        {!isMobile && (
+          <div style={{ flex: '0 0 35%', width: '35%', display: 'flex', justifyContent: 'center' }}>
+            {paymentBox}
+          </div>
+        )}
+      </div>
+
+      <SiteFooter isMobile={isMobile} />
+    </div>
   )
 }

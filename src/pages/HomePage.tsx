@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
 import { SiteFooter } from '../components/SiteFooter'
 import { useAuth } from '../context/AuthContext'
@@ -13,8 +13,31 @@ import {
   type ProcessingCategory,
   type TypeFilter,
 } from '../data/countries'
+import { flagUrl } from '../utils/flags'
 
 const BRAND = '#f93e42'
+
+type PopularDestination = {
+  label: string
+  href?: string
+  flagCode?: string
+  searchTerm?: string
+}
+
+const popularDestinations: PopularDestination[] = [
+  { label: 'Schengen', href: '/visa/schengen', flagCode: 'eu' },
+  { label: 'UK', href: '/visa/uk', flagCode: 'gb' },
+  { label: 'USA', href: '/visa/united-states', flagCode: 'us' },
+  { label: 'Canada', href: '/visa/canada', flagCode: 'ca' },
+  { label: 'Australia', href: '/visa/australia', flagCode: 'au' },
+  { label: 'Japan', href: '/visa/japan', flagCode: 'jp' },
+  { label: 'Korea', href: '/visa/south-korea', flagCode: 'kr' },
+  { label: 'Saudi', href: '/visa/saudi-arabia', flagCode: 'sa' },
+  { label: 'Turkey', searchTerm: 'turkey', flagCode: 'tr' },
+]
+
+const WHATSAPP_EXPERT = '971559641020'
+const PARTNER_EMAIL = 'procurement@superjetgroup.com'
 
 type DeliveryFilter = 'any' | ProcessingCategory
 type TypeFilterValue = 'all' | TypeFilter
@@ -46,8 +69,8 @@ const documentOptions: { value: DocumentsFilter; label: string; count: number }[
   { value: 'us-uk-schengen', label: 'With US/UK/Schengen visa', count: 9 },
 ]
 
-function unsplashUrl(name: string) {
-  return `https://source.unsplash.com/400x600/?${name.replace(/\s+/g, '+')},travel`
+function countryImageUrl(slug: string) {
+  return `https://picsum.photos/seed/${slug}/400/600`
 }
 
 function formatHolidayDate(date: Date) {
@@ -133,6 +156,311 @@ function ClockIcon() {
       <circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="1.5" />
       <path d="M12 7v5l3 2" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
+  )
+}
+
+function ClipboardCheckIcon() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="8" y="3" width="12" height="16" rx="2" stroke={BRAND} strokeWidth="1.5" />
+      <path d="M8 7H6a2 2 0 00-2 2v12h12v-2" stroke={BRAND} strokeWidth="1.5" />
+      <path d="M11 13l2 2 4-4" stroke={BRAND} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function HeadsetIcon() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 14v-2a8 8 0 0116 0v2M6 14h2v4H6v-4zm10 0h2v4h-2v-4z"
+        stroke={BRAND}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function HandshakeIcon() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M7 11l2-2 3 3 5-5 2 2-5 5-3-3-2 2v3H7v-3z"
+        stroke={BRAND}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M4 20h8" stroke={BRAND} strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function UploadIcon() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 16V4m0 0l4 4m-4-4L8 8" stroke={BRAND} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 20h16" stroke={BRAND} strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function PassportVisaIcon({ size = 48 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden>
+      <rect x="12" y="8" width="40" height="48" rx="6" fill="rgba(249,62,66,0.12)" stroke={BRAND} strokeWidth="2" />
+      <circle cx="32" cy="28" r="8" stroke={BRAND} strokeWidth="2" />
+      <path d="M22 44c0-5.523 4.477-10 10-10s10 4.477 10 10" stroke={BRAND} strokeWidth="2" strokeLinecap="round" />
+      <rect x="38" y="14" width="18" height="24" rx="3" fill="#fff" stroke="#5057ea" strokeWidth="1.5" />
+      <path d="M42 22h10M42 27h8M42 32h6" stroke="#5057ea" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function PartnerBriefcaseIcon({ size = 48 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden>
+      <rect x="8" y="22" width="48" height="30" rx="4" fill="rgba(80,87,234,0.1)" stroke="#5057ea" strokeWidth="2" />
+      <path d="M24 22v-4a8 8 0 0116 0v4" stroke="#5057ea" strokeWidth="2" strokeLinecap="round" />
+      <path d="M8 32h48" stroke="#5057ea" strokeWidth="2" />
+      <circle cx="32" cy="36" r="4" fill={BRAND} />
+      <path d="M44 12l6 6-6 6" stroke={BRAND} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M50 18H38" stroke={BRAND} strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function SectionCta({
+  label,
+  primary,
+  onClick,
+  href,
+  to,
+}: {
+  label: string
+  primary?: boolean
+  onClick?: () => void
+  href?: string
+  to?: string
+}) {
+  const [hovered, setHovered] = useState(false)
+  const style: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '14px 24px',
+    borderRadius: 12,
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: 'pointer',
+    textDecoration: 'none',
+    border: primary ? 'none' : '1.5px solid rgba(249,62,66,0.25)',
+    background: primary
+      ? hovered
+        ? '#e83539'
+        : BRAND
+      : hovered
+        ? '#fff8f8'
+        : '#fff',
+    color: primary ? '#fff' : '#111827',
+    boxShadow: primary && hovered ? '0 8px 24px rgba(249,62,66,0.3)' : 'none',
+    transform: hovered ? 'translateY(-1px)' : 'none',
+    transition: 'transform 0.2s, box-shadow 0.2s, background 0.2s',
+    fontFamily: 'inherit',
+    whiteSpace: 'nowrap',
+  }
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target={href.startsWith('http') ? '_blank' : undefined}
+        rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
+        style={style}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        {label}
+      </a>
+    )
+  }
+  if (to) {
+    return (
+      <Link to={to} style={style} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+        {label}
+      </Link>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={style}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {label}
+    </button>
+  )
+}
+
+function DestinationChip({
+  dest,
+  onSearch,
+}: {
+  dest: PopularDestination
+  onSearch: (term: string) => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  const chipStyle: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 18px',
+    background: hovered ? '#fff' : 'rgba(255,255,255,0.92)',
+    border: `1px solid ${hovered ? 'rgba(249,62,66,0.25)' : 'rgba(249,62,66,0.12)'}`,
+    borderRadius: 40,
+    boxShadow: hovered ? '0 8px 24px rgba(249,62,66,0.12)' : '0 2px 12px rgba(0,0,0,0.04)',
+    textDecoration: 'none',
+    color: '#111827',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'transform 0.2s, box-shadow 0.2s, border-color 0.2s',
+    transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+  }
+
+  const inner = (
+    <>
+      {dest.flagCode && (
+        <img
+          src={flagUrl(dest.flagCode, 40)}
+          alt=""
+          width={22}
+          height={15}
+          style={{ borderRadius: 2, objectFit: 'cover', flexShrink: 0 }}
+        />
+      )}
+      {dest.label}
+    </>
+  )
+
+  if (dest.href) {
+    return (
+      <Link
+        to={dest.href}
+        style={chipStyle}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        {inner}
+      </Link>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      style={{ ...chipStyle, fontFamily: 'inherit' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => dest.searchTerm && onSearch(dest.searchTerm)}
+    >
+      {inner}
+    </button>
+  )
+}
+
+function HeroCtaButton({
+  icon,
+  label,
+  primary,
+  onClick,
+  href,
+  to,
+}: {
+  icon: ReactNode
+  label: string
+  primary?: boolean
+  onClick?: () => void
+  href?: string
+  to?: string
+}) {
+  const [hovered, setHovered] = useState(false)
+  const base: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: '16px 20px',
+    borderRadius: 16,
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: 'pointer',
+    textDecoration: 'none',
+    border: primary ? 'none' : '1.5px solid rgba(249,62,66,0.2)',
+    background: primary
+      ? hovered
+        ? 'linear-gradient(135deg, #e83539, #f93e42)'
+        : 'linear-gradient(135deg, #f93e42, #ff6b6b)'
+      : hovered
+        ? '#fff8f8'
+        : '#fff',
+    color: primary ? '#fff' : '#111827',
+    boxShadow: primary
+      ? hovered
+        ? '0 12px 36px rgba(249,62,66,0.35)'
+        : '0 8px 28px rgba(249,62,66,0.25)'
+      : hovered
+        ? '0 6px 20px rgba(249,62,66,0.1)'
+        : '0 2px 12px rgba(0,0,0,0.04)',
+    transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+    transition: 'transform 0.2s, box-shadow 0.2s, background 0.2s',
+    fontFamily: 'inherit',
+    width: '100%',
+  }
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target={href.startsWith('http') ? '_blank' : undefined}
+        rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
+        style={base}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        {icon}
+        {label}
+      </a>
+    )
+  }
+
+  if (to) {
+    return (
+      <Link
+        to={to}
+        style={base}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        {icon}
+        {label}
+      </Link>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={base}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {icon}
+      {label}
+    </button>
   )
 }
 
@@ -381,7 +709,7 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
         }}
       >
         <img
-          src={unsplashUrl(country.name)}
+          src={countryImageUrl(country.slug)}
           alt=""
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
           loading="lazy"
@@ -553,7 +881,247 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
 
 type IpToast = { detectedCountry: string; detectedCode: string }
 
+const TRUST_ITEMS = [
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="2.5" aria-hidden>
+        <path d="M20 6L9 17l-5-5" />
+      </svg>
+    ),
+    value: '500+',
+    label: 'Visas Processed',
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="2" aria-hidden>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 6v6l4 2" />
+      </svg>
+    ),
+    value: '98%',
+    label: 'Approval Rate',
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="2" aria-hidden>
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+        <circle cx="12" cy="10" r="3" />
+      </svg>
+    ),
+    value: 'UAE Based',
+    label: 'Expert Team',
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="2" aria-hidden>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+    ),
+    value: 'On Time',
+    label: 'Guaranteed',
+  },
+] as const
+
+const HOW_IT_WORKS_STEPS = [
+  {
+    title: 'Check Requirements',
+    description: 'Enter your nationality and destination',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.35-4.35" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Submit Documents',
+    description: 'Upload your documents securely',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
+    ),
+  },
+  {
+    title: 'We Process',
+    description: 'Our experts handle your application',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Visa Delivered',
+    description: 'Receive your visa on time, guaranteed',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f93e42" strokeWidth="1.5" aria-hidden>
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
+      </svg>
+    ),
+  },
+] as const
+
+const WHY_CHOOSE_FEATURES = [
+  { emoji: '🎯', title: 'Expert Team', description: 'UAE-based visa experts with 10+ years experience' },
+  { emoji: '⚡', title: 'Fast Processing', description: 'Most visas processed within 3-7 business days' },
+  { emoji: '📋', title: 'Document Guidance', description: 'Step-by-step checklist for every destination' },
+  { emoji: '🛡', title: 'Rejection Support', description: 'Free reapplication support if visa is rejected' },
+  { emoji: '💬', title: 'WhatsApp Support', description: 'Direct WhatsApp access to your case officer' },
+  { emoji: '🏆', title: '98% Success Rate', description: 'Industry-leading approval rate across all visas' },
+] as const
+
+const TESTIMONIALS = [
+  {
+    initials: 'AH',
+    name: 'Ahmed Hassan',
+    color: BRAND,
+    text: 'Got my Schengen visa in 5 days. Superjet team handled everything perfectly. Highly recommended!',
+    date: 'Mar 2026',
+  },
+  {
+    initials: 'PS',
+    name: 'Priya Sharma',
+    color: '#5057ea',
+    text: 'UK visa approved first attempt. The document checklist was very clear and the team was always available on WhatsApp.',
+    date: 'Feb 2026',
+  },
+  {
+    initials: 'MK',
+    name: 'Mohammed Al Kaabi',
+    color: '#22c55e',
+    text: 'Applied for USA visa for my whole family. Process was smooth and transparent. Will use again.',
+    date: 'Jan 2026',
+  },
+] as const
+
+const FAQ_ITEMS = [
+  {
+    q: 'How long does visa processing take?',
+    a: 'Processing time varies by destination. Schengen typically takes 10-15 days, UK 15 working days, UAE same day for most nationalities. We always aim to submit your application well within the required timeframe.',
+  },
+  {
+    q: 'What documents do I need for a Schengen visa?',
+    a: 'For Schengen you typically need: valid passport (6+ months), UAE residence visa, Emirates ID, 3-6 months bank statement, salary certificate/NOC, hotel booking, flight booking, travel insurance, and passport photos. We provide a complete checklist after you apply.',
+  },
+  {
+    q: 'What if my visa gets rejected?',
+    a: 'If your visa is rejected, our Superjet Global Protect guarantee covers you. We offer free consultation on rejection reasons and support for reapplication. In some cases, a full refund may apply.',
+  },
+  {
+    q: 'Can I apply for my family together?',
+    a: 'Yes, you can add multiple travelers in one application. Adding 2 or more travelers also unlocks a 5% discount on processing fees.',
+  },
+  {
+    q: 'How do I track my visa application status?',
+    a: 'After applying, you receive a unique application ID. You can track real-time status in your customer dashboard at /user/me or contact us on WhatsApp anytime.',
+  },
+] as const
+
+function WhyChooseCard({
+  emoji,
+  title,
+  description,
+}: {
+  emoji: string
+  title: string
+  description: string
+}) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <article
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        border: '1px solid #f5f5f5',
+        borderRadius: 20,
+        padding: 28,
+        transition: 'all 0.3s',
+        boxShadow: hovered ? '0 8px 32px rgba(249,62,66,0.08)' : 'none',
+        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
+      }}
+    >
+      <div
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: '50%',
+          background: '#fff8f8',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 24,
+          marginBottom: 16,
+        }}
+      >
+        {emoji}
+      </div>
+      <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#111' }}>{title}</h3>
+      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: '#888' }}>{description}</p>
+    </article>
+  )
+}
+
+function FaqItem({ q, a, open, onToggle }: { q: string; a: string; open: boolean; onToggle: () => void }) {
+  return (
+    <div style={{ border: '1px solid #f0f0f0', borderRadius: 16, marginBottom: 12, overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          width: '100%',
+          padding: '20px 24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          border: 'none',
+          background: '#fff',
+          cursor: 'pointer',
+          textAlign: 'left',
+          fontFamily: 'inherit',
+        }}
+      >
+        <span style={{ fontWeight: 700, fontSize: 15, color: '#1a1a1a', paddingRight: 16 }}>{q}</span>
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#888"
+          strokeWidth="2"
+          aria-hidden
+          style={{
+            flexShrink: 0,
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.3s',
+          }}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      <div
+        style={{
+          padding: open ? '0 24px 20px' : '0 24px',
+          maxHeight: open ? 500 : 0,
+          overflow: 'hidden',
+          transition: 'max-height 0.3s ease, padding 0.3s ease',
+          color: '#666',
+          fontSize: 15,
+          lineHeight: 1.7,
+        }}
+      >
+        {a}
+      </div>
+    </div>
+  )
+}
+
 export default function HomePage() {
+  const navigate = useNavigate()
   const { isLoggedIn, avatarInitials, avatarColor } = useAuth()
   const {
     countryCode,
@@ -573,8 +1141,10 @@ export default function HomePage() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const [filterSticky, setFilterSticky] = useState(false)
   const [filterBarHeight, setFilterBarHeight] = useState(72)
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null)
 
   const heroRef = useRef<HTMLElement>(null)
+  const countriesSectionRef = useRef<HTMLElement>(null)
   const filterBarRef = useRef<HTMLDivElement>(null)
   const filterBarInnerRef = useRef<HTMLDivElement>(null)
   const heroSearchRef = useRef<HTMLInputElement>(null)
@@ -599,7 +1169,8 @@ export default function HomePage() {
         const detectedCode = data.country_code?.trim().toLowerCase()
         if (!detectedCountry || !detectedCode || cancelled) return
 
-        const savedRaw = localStorage.getItem('user_citizenship')
+        const savedRaw =
+          localStorage.getItem('super_visa_citizenship') ?? localStorage.getItem('user_citizenship')
         if (!savedRaw) {
           setDetectedCountryHint(detectedCountry)
           modalTimer = window.setTimeout(() => {
@@ -692,6 +1263,16 @@ export default function HomePage() {
       )
     })
   }, [search, deliveryFilter, typeFilter, documentsFilter, holidayDate])
+
+  const scrollToVisaTools = () => {
+    filterBarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    window.setTimeout(() => heroSearchRef.current?.focus(), 450)
+  }
+
+  const handleDestinationSearch = (term: string) => {
+    setSearch(term)
+    countriesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const dropdownStyle: CSSProperties = {
     position: 'absolute',
@@ -939,7 +1520,7 @@ export default function HomePage() {
           ref={heroRef}
           style={{
             position: 'relative',
-            padding: isMobile ? '40px 20px 32px' : '56px 32px 40px',
+            padding: isMobile ? '40px 20px 40px' : '64px 32px 48px',
             textAlign: 'center',
             overflow: 'hidden',
             animation: 'fadeSlideUp 0.7s ease forwards',
@@ -994,27 +1575,117 @@ export default function HomePage() {
             }}
           />
 
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <h1
+          <div style={{ position: 'relative', zIndex: 1, maxWidth: 960, margin: '0 auto' }}>
+            <p
               style={{
-                margin: '0 0 12px',
-                fontSize: isMobile ? '2rem' : 'clamp(2.25rem, 5vw, 3.25rem)',
-                fontWeight: 700,
-                letterSpacing: '-0.03em',
-                color: '#111827',
+                margin: '0 0 16px',
+                display: 'inline-block',
+                padding: '6px 16px',
+                borderRadius: 40,
+                background: 'rgba(249,62,66,0.08)',
+                border: '1px solid rgba(249,62,66,0.15)',
+                color: BRAND,
+                fontSize: 13,
+                fontWeight: 600,
               }}
             >
-              Visas. Delivered <span style={{ color: BRAND }}>On Time</span>.
-            </h1>
-            <p style={{ margin: '0 0 0', fontSize: 17, color: '#666' }}>
-              120+ destinations for UAE residents. Guaranteed.
+              ✦ Trusted visa desk for UAE residents
             </p>
+            <h1
+              style={{
+                margin: '0 0 16px',
+                fontSize: isMobile ? '2rem' : 'clamp(2.5rem, 5vw, 3.5rem)',
+                fontWeight: 800,
+                letterSpacing: '-0.03em',
+                color: '#111827',
+                lineHeight: 1.08,
+              }}
+            >
+              Superjet Global{' '}
+              <span style={{ color: BRAND }}>Visa Desk</span>
+            </h1>
+            <p
+              style={{
+                margin: '0 auto',
+                maxWidth: 620,
+                fontSize: isMobile ? 16 : 18,
+                lineHeight: 1.65,
+                color: '#666',
+              }}
+            >
+              Visa support for UAE residents, families, businesses, and travel agents.
+            </p>
+
+            <div style={{ marginTop: 32 }}>
+              <p
+                style={{
+                  margin: '0 0 14px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#9ca3af',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                }}
+              >
+                Popular Destinations
+              </p>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  justifyContent: 'center',
+                  gap: 10,
+                }}
+              >
+                {popularDestinations.map((dest) => (
+                  <DestinationChip
+                    key={dest.label}
+                    dest={dest}
+                    onSearch={handleDestinationSearch}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+                gap: 12,
+                marginTop: 32,
+                maxWidth: 720,
+                marginLeft: 'auto',
+                marginRight: 'auto',
+              }}
+            >
+              <HeroCtaButton
+                primary
+                icon={<ClipboardCheckIcon />}
+                label="Check Visa Requirement"
+                to="/tools/visa-requirements/dubai-visa"
+              />
+              <HeroCtaButton
+                icon={<HeadsetIcon />}
+                label="Talk to Visa Expert"
+                href={`https://wa.me/${WHATSAPP_EXPERT}`}
+              />
+              <HeroCtaButton
+                icon={<HandshakeIcon />}
+                label="Become Agent Partner"
+                href={`mailto:${PARTNER_EMAIL}?subject=${encodeURIComponent('Agent Partnership Inquiry')}`}
+              />
+              <HeroCtaButton
+                icon={<UploadIcon />}
+                label="Upload Documents"
+                to={isLoggedIn ? '/user/me' : '/sign-in'}
+              />
+            </div>
 
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                maxWidth: 520,
+                maxWidth: 560,
                 margin: '32px auto 0',
                 padding: '6px 6px 6px 18px',
                 background: '#fff',
@@ -1043,6 +1714,7 @@ export default function HomePage() {
               />
               <button
                 type="button"
+                onClick={scrollToVisaTools}
                 style={{
                   padding: '10px 22px',
                   border: 'none',
@@ -1061,7 +1733,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <div>
+        <div id="visa-tools">
           {filterSticky && <div style={{ height: filterBarHeight }} aria-hidden />}
 
           <div
@@ -1104,16 +1776,19 @@ export default function HomePage() {
           </div>
         </div>
 
-        <main style={{ padding: isMobile ? '0 12px 48px' : '0 32px 48px' }}>
+        <main
+          ref={countriesSectionRef}
+          style={{ padding: isMobile ? '0 12px 48px' : '0 32px 48px' }}
+        >
           <div style={{ maxWidth: 1280, margin: '0 auto 24px' }}>
             <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700, color: '#111827' }}>
-              Popular Destinations
+              Explore All Destinations
             </h2>
             <p style={{ margin: '0 0 16px', fontSize: 14, color: '#888' }}>
-              Trending visas for UAE residents
+              Filter by delivery time, visa type, and documents — find the right visa fast
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {['🔥 Trending', '⚡ Fast', '💳 e-Visa'].map((tag) => (
+              {['🔥 Trending', '⚡ Fast Track', '💳 e-Visa Ready'].map((tag) => (
                 <span
                   key={tag}
                   style={{
@@ -1143,6 +1818,592 @@ export default function HomePage() {
             </p>
           )}
         </main>
+
+        {/* Trust bar */}
+        <section
+          style={{
+            width: '100%',
+            background: '#fff',
+            borderTop: '1px solid #f5f5f5',
+            padding: 32,
+          }}
+        >
+          <div
+            style={{
+              display: isMobile ? 'grid' : 'flex',
+              gridTemplateColumns: isMobile ? '1fr 1fr' : undefined,
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: isMobile ? 24 : 48,
+              flexWrap: 'wrap',
+              maxWidth: 1100,
+              margin: '0 auto',
+            }}
+          >
+            {TRUST_ITEMS.map((item) => (
+              <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%',
+                    background: '#fff8f8',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {item.icon}
+                </span>
+                <div>
+                  <strong style={{ display: 'block', fontSize: 20, color: '#111' }}>{item.value}</strong>
+                  <span style={{ fontSize: 13, color: '#666' }}>{item.label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section
+          style={{
+            background: 'linear-gradient(160deg, #fff8f8, #fff)',
+            padding: isMobile ? '48px 16px' : '64px 32px',
+            textAlign: 'center',
+          }}
+        >
+          <h2 style={{ margin: '0 0 8px', fontSize: isMobile ? 26 : 32, fontWeight: 700, color: '#1a1a1a' }}>
+            How It Works
+          </h2>
+          <p style={{ margin: '0 0 48px', color: '#888', fontSize: 16 }}>Get your visa in 4 simple steps</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
+              gap: isMobile ? 32 : 16,
+              maxWidth: 1100,
+              margin: '0 auto',
+              position: 'relative',
+            }}
+          >
+            {!isMobile &&
+              HOW_IT_WORKS_STEPS.slice(0, -1).map((_, i) => (
+                <div
+                  key={`line-${i}`}
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    top: 24,
+                    left: `${12.5 + i * 25}%`,
+                    width: '25%',
+                    borderTop: '2px dashed #f0d0d0',
+                    zIndex: 0,
+                  }}
+                />
+              ))}
+            {HOW_IT_WORKS_STEPS.map((step, i) => (
+              <div key={step.title} style={{ position: 'relative', zIndex: 1 }}>
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: '50%',
+                    background: BRAND,
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: 18,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto',
+                  }}
+                >
+                  {i + 1}
+                </div>
+                <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>{step.icon}</div>
+                <h3 style={{ margin: '12px 0 6px', fontSize: 16, fontWeight: 700, color: '#111' }}>{step.title}</h3>
+                <p style={{ margin: 0, fontSize: 14, color: '#888', lineHeight: 1.5 }}>{step.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Why choose us */}
+        <section style={{ padding: isMobile ? '48px 16px' : '64px 32px', background: '#fff' }}>
+          <h2 style={{ margin: '0 0 8px', fontSize: isMobile ? 26 : 32, fontWeight: 700, color: '#1a1a1a', textAlign: 'center' }}>
+            Why Choose Super Visa?
+          </h2>
+          <p style={{ margin: '0 0 48px', color: '#888', fontSize: 16, textAlign: 'center' }}>
+            Trusted by thousands of UAE residents
+          </p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: 20,
+              maxWidth: 1100,
+              margin: '0 auto',
+            }}
+          >
+            {WHY_CHOOSE_FEATURES.map((f) => (
+              <WhyChooseCard key={f.title} emoji={f.emoji} title={f.title} description={f.description} />
+            ))}
+          </div>
+        </section>
+
+        {/* Testimonials */}
+        <section
+          style={{
+            background: 'linear-gradient(160deg, #fff8f8, #fff)',
+            padding: isMobile ? '48px 16px' : '64px 32px',
+          }}
+        >
+          <h2 style={{ margin: '0 0 8px', fontSize: isMobile ? 26 : 32, fontWeight: 700, color: '#1a1a1a', textAlign: 'center' }}>
+            What Our Customers Say
+          </h2>
+          <p style={{ margin: '0 0 12px', color: BRAND, fontSize: 15, fontWeight: 600, textAlign: 'center' }}>
+            4.8 ★ rating across all platforms
+          </p>
+          <div
+            style={{
+              display: 'flex',
+              gap: 24,
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              marginBottom: 48,
+              fontSize: 13,
+              color: '#888',
+            }}
+          >
+            {['Trustpilot', 'App Store', 'Google Play'].map((platform, i) => (
+              <span key={platform}>
+                {i > 0 && <span style={{ margin: '0 12px', color: '#ddd' }}>|</span>}
+                {platform}
+              </span>
+            ))}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              gap: 20,
+              overflowX: isMobile ? 'auto' : 'visible',
+              flexWrap: isMobile ? 'nowrap' : 'wrap',
+              justifyContent: isMobile ? 'flex-start' : 'center',
+              maxWidth: 1100,
+              margin: '0 auto',
+              paddingBottom: isMobile ? 8 : 0,
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
+            {TESTIMONIALS.map((t) => (
+              <article
+                key={t.name}
+                style={{
+                  flex: isMobile ? '0 0 300px' : '1 1 280px',
+                  minWidth: isMobile ? 300 : 280,
+                  maxWidth: 360,
+                  background: '#fff',
+                  borderRadius: 20,
+                  padding: 28,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+                }}
+              >
+                <div style={{ color: '#fbbf24', fontSize: 18, letterSpacing: 2 }}>★★★★★</div>
+                <p style={{ margin: '12px 0 20px', color: '#444', fontSize: 15, lineHeight: 1.7 }}>
+                  &ldquo;{t.text}&rdquo;
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: '50%',
+                      background: t.color,
+                      color: '#fff',
+                      fontWeight: 700,
+                      fontSize: 14,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {t.initials}
+                  </span>
+                  <div>
+                    <strong style={{ display: 'block', fontSize: 14, color: '#111' }}>{t.name}</strong>
+                    <span style={{ fontSize: 12, color: '#888' }}>UAE Resident · {t.date}</span>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* Agent partner banner */}
+        <section style={{ padding: isMobile ? '0 16px 48px' : '0 32px 48px' }}>
+          <div
+            style={{
+              maxWidth: 1100,
+              margin: '0 auto',
+              background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+              borderRadius: 24,
+              padding: isMobile ? '32px 24px' : '48px 64px',
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              justifyContent: 'space-between',
+              alignItems: isMobile ? 'stretch' : 'center',
+              gap: 32,
+            }}
+          >
+            <div>
+              <span
+                style={{
+                  display: 'inline-block',
+                  background: 'rgba(249,62,66,0.2)',
+                  color: BRAND,
+                  borderRadius: 40,
+                  padding: '6px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                🤝 B2B Partner Program
+              </span>
+              <h2
+                style={{
+                  margin: '12px 0 8px',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: isMobile ? 24 : 32,
+                }}
+              >
+                Are You a Travel Agent?
+              </h2>
+              <p style={{ margin: '0 0 20px', color: 'rgba(255,255,255,0.6)', fontSize: 16, lineHeight: 1.6 }}>
+                Join our partner network. Earn commission on every visa you refer.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {['✓ Up to 15% Commission', '✓ Real-time tracking', '✓ Dedicated support'].map((pill) => (
+                  <span
+                    key={pill}
+                    style={{
+                      background: 'rgba(255,255,255,0.1)',
+                      borderRadius: 40,
+                      padding: '6px 14px',
+                      color: '#fff',
+                      fontSize: 13,
+                    }}
+                  >
+                    {pill}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/agent/register')}
+              style={{
+                background: BRAND,
+                color: '#fff',
+                borderRadius: 40,
+                padding: '16px 32px',
+                fontWeight: 700,
+                fontSize: 16,
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 8px 32px rgba(249,62,66,0.4)',
+                fontFamily: 'inherit',
+                width: isMobile ? '100%' : 'auto',
+                flexShrink: 0,
+              }}
+            >
+              Become Agent Partner →
+            </button>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section style={{ padding: isMobile ? '48px 16px' : '64px 32px', maxWidth: 800, margin: '0 auto' }}>
+          <h2 style={{ margin: '0 0 8px', fontSize: isMobile ? 26 : 32, fontWeight: 700, color: '#1a1a1a', textAlign: 'center' }}>
+            Frequently Asked Questions
+          </h2>
+          <p style={{ margin: '0 0 48px', color: '#888', fontSize: 16, textAlign: 'center' }}>
+            Everything you need to know about visa applications
+          </p>
+          {FAQ_ITEMS.map((item, i) => (
+            <FaqItem
+              key={item.q}
+              q={item.q}
+              a={item.a}
+              open={openFaqIndex === i}
+              onToggle={() => setOpenFaqIndex(openFaqIndex === i ? null : i)}
+            />
+          ))}
+        </section>
+
+        <section
+          aria-labelledby="visa-requirements-heading"
+          style={{
+            padding: isMobile ? '0 12px 32px' : '0 32px 32px',
+          }}
+        >
+          <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Section 1: Visa Requirements */}
+            <article
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                borderRadius: 24,
+                background: 'linear-gradient(135deg, #fff 0%, #fff8f8 50%, #f8f8ff 100%)',
+                border: '1px solid rgba(249,62,66,0.1)',
+                boxShadow: '0 8px 40px rgba(249,62,66,0.06)',
+                padding: isMobile ? 24 : 40,
+              }}
+            >
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  width: 280,
+                  height: 280,
+                  borderRadius: '50%',
+                  background: 'rgba(249,62,66,0.06)',
+                  filter: 'blur(40px)',
+                  top: -80,
+                  right: -60,
+                  pointerEvents: 'none',
+                }}
+              />
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  width: 200,
+                  height: 200,
+                  borderRadius: '50%',
+                  background: 'rgba(80,87,234,0.05)',
+                  filter: 'blur(40px)',
+                  bottom: -40,
+                  left: -40,
+                  pointerEvents: 'none',
+                }}
+              />
+              <div
+                style={{
+                  position: 'relative',
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : 'auto 1fr',
+                  gap: isMobile ? 24 : 40,
+                  alignItems: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: isMobile ? 88 : 112,
+                    height: isMobile ? 88 : 112,
+                    borderRadius: 24,
+                    background: '#fff',
+                    border: '1px solid rgba(249,62,66,0.12)',
+                    boxShadow: '0 4px 20px rgba(249,62,66,0.08)',
+                    margin: isMobile ? '0 auto' : undefined,
+                  }}
+                >
+                  <PassportVisaIcon size={isMobile ? 44 : 56} />
+                </div>
+                <div style={{ textAlign: isMobile ? 'center' : 'left' }}>
+                  <h2
+                    id="visa-requirements-heading"
+                    style={{
+                      margin: '0 0 12px',
+                      fontSize: isMobile ? 22 : 28,
+                      fontWeight: 800,
+                      letterSpacing: '-0.02em',
+                      color: '#111827',
+                    }}
+                  >
+                    Visa Requirements
+                  </h2>
+                  <p
+                    style={{
+                      margin: '0 0 24px',
+                      fontSize: isMobile ? 15 : 16,
+                      lineHeight: 1.7,
+                      color: '#666',
+                      maxWidth: 720,
+                      marginLeft: isMobile ? 'auto' : undefined,
+                      marginRight: isMobile ? 'auto' : undefined,
+                    }}
+                  >
+                    Check the visa requirements, required documents, processing timelines, and application
+                    guidelines for your destination. Our team helps UAE residents, families, businesses, and
+                    travelers prepare complete and accurate applications.
+                  </p>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 12,
+                      justifyContent: isMobile ? 'center' : 'flex-start',
+                    }}
+                  >
+                    <SectionCta
+                      primary
+                      label="Check Visa Requirements"
+                      to="/tools/visa-requirements/dubai-visa"
+                    />
+                    <SectionCta
+                      label="Talk to Visa Expert"
+                      href={`https://wa.me/${WHATSAPP_EXPERT}`}
+                    />
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            {/* Section 2: Become an Agent Partner */}
+            <article
+              style={{
+                borderRadius: 24,
+                background: '#fff',
+                border: '1px solid #eee',
+                boxShadow: '0 4px 32px rgba(0,0,0,0.04)',
+                padding: isMobile ? 24 : 40,
+              }}
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                  gap: isMobile ? 28 : 48,
+                  alignItems: 'start',
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 14,
+                      marginBottom: 16,
+                      justifyContent: isMobile ? 'center' : 'flex-start',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 16,
+                        background: 'linear-gradient(135deg, rgba(80,87,234,0.08), rgba(249,62,66,0.08))',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <PartnerBriefcaseIcon size={36} />
+                    </div>
+                    <h2
+                      style={{
+                        margin: 0,
+                        fontSize: isMobile ? 22 : 26,
+                        fontWeight: 800,
+                        letterSpacing: '-0.02em',
+                        color: '#111827',
+                      }}
+                    >
+                      Become an Agent Partner
+                    </h2>
+                  </div>
+                  <p
+                    style={{
+                      margin: '0 0 24px',
+                      fontSize: isMobile ? 15 : 16,
+                      lineHeight: 1.7,
+                      color: '#666',
+                      textAlign: isMobile ? 'center' : 'left',
+                    }}
+                  >
+                    Partner with Superjet Global Visa Desk and expand your travel business with access to visa
+                    processing support, dedicated assistance, and competitive partnership opportunities. Ideal
+                    for travel agencies, consultants, and businesses serving international travelers.
+                  </p>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 12,
+                      justifyContent: isMobile ? 'center' : 'flex-start',
+                    }}
+                  >
+                    <SectionCta
+                      primary
+                      label="Become an Agent Partner"
+                      href={`mailto:${PARTNER_EMAIL}?subject=${encodeURIComponent('Agent Partnership Application')}`}
+                    />
+                    <SectionCta label="Contact Partnership Team" to="/contact" />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    background: '#f9fafb',
+                    borderRadius: 16,
+                    border: '1px solid #eee',
+                    padding: isMobile ? 20 : 24,
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: '0 0 12px',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: '#111827',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    Eligibility
+                  </h3>
+                  <ul
+                    style={{
+                      margin: '0 0 20px',
+                      paddingLeft: 18,
+                      fontSize: 14,
+                      lineHeight: 1.65,
+                      color: '#555',
+                    }}
+                  >
+                    <li>Must be a registered travel agency, tourism company, consultancy, or legitimate business entity.</li>
+                    <li>Must comply with applicable UAE laws and regulations.</li>
+                    <li>Must provide accurate business information during registration.</li>
+                  </ul>
+                  <h3
+                    style={{
+                      margin: '0 0 12px',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: '#111827',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    Disclaimer
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.65, color: '#888' }}>
+                    Agent partnership approval is subject to verification and review by Superjet Global Visa
+                    Desk. Submission of an application does not guarantee approval. Additional documents may
+                    be requested during the verification process.
+                  </p>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
 
         <SiteFooter isMobile={isMobile} />
       </div>
