@@ -1,29 +1,42 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, MouseEvent } from 'react'
 
 export const BRAND = '#f93e42'
 export const BRAND_BLUE = '#5057ea'
 export const PAGE_BG = '#f8f9fc'
 export const SIDEBAR_BG = '#ffffff'
 export const CARD_BG = '#ffffff'
-export const BORDER = '#f0f0f5'
+export const BORDER = '#e8ecf0'
 export const TEXT_PRIMARY = '#1a1a2e'
-export const TEXT_SECONDARY = '#6b7280'
-export const TEXT_MUTED = '#9ca3af'
+export const TEXT_SECONDARY = '#64748b'
+export const TEXT_MUTED = '#94a3b8'
 export const SUCCESS = '#22c55e'
 export const WARNING = '#f59e0b'
-export const INFO = '#3b82f6'
+export const DANGER = '#ef4444'
+export const PURPLE = '#8b5cf6'
 
 export const cardStyle: CSSProperties = {
   background: CARD_BG,
   borderRadius: 20,
   border: `1px solid ${BORDER}`,
-  boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   padding: 24,
+}
+
+export const hoverCardProps = {
+  onMouseEnter: (e: MouseEvent<HTMLElement>) => {
+    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'
+    e.currentTarget.style.transform = 'translateY(-2px)'
+  },
+  onMouseLeave: (e: MouseEvent<HTMLElement>) => {
+    e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)'
+    e.currentTarget.style.transform = 'none'
+  },
+  style: { transition: 'all 0.2s ease' as const },
 }
 
 export const inputStyle: CSSProperties = {
   background: PAGE_BG,
-  border: `1.5px solid ${BORDER}`,
+  border: `1px solid ${BORDER}`,
   borderRadius: 12,
   padding: '12px 16px',
   color: TEXT_PRIMARY,
@@ -32,10 +45,7 @@ export const inputStyle: CSSProperties = {
   boxSizing: 'border-box',
 }
 
-export const selectStyle: CSSProperties = {
-  ...inputStyle,
-  cursor: 'pointer',
-}
+export const selectStyle: CSSProperties = { ...inputStyle, cursor: 'pointer' }
 
 export const primaryBtn: CSSProperties = {
   background: `linear-gradient(135deg, ${BRAND}, #ff6b6b)`,
@@ -50,9 +60,9 @@ export const primaryBtn: CSSProperties = {
 }
 
 export const secondaryBtn: CSSProperties = {
-  background: PAGE_BG,
-  color: TEXT_PRIMARY,
-  border: `1.5px solid ${BORDER}`,
+  background: '#fff',
+  color: TEXT_SECONDARY,
+  border: `1px solid ${BORDER}`,
   borderRadius: 10,
   padding: '10px 20px',
   fontWeight: 500,
@@ -62,7 +72,7 @@ export const secondaryBtn: CSSProperties = {
 
 export const outlineBtn: CSSProperties = {
   background: '#fff',
-  border: `1.5px solid ${BORDER}`,
+  border: `1px solid ${BORDER}`,
   color: TEXT_PRIMARY,
   borderRadius: 10,
   padding: '10px 20px',
@@ -77,16 +87,16 @@ export const tableHeaderStyle: CSSProperties = {
   color: TEXT_SECONDARY,
   fontSize: 12,
   textTransform: 'uppercase',
-  letterSpacing: '0.05em',
+  letterSpacing: '0.06em',
   background: PAGE_BG,
 }
 
 export const tabActive = (active: boolean): CSSProperties => ({
   border: active ? 'none' : `1px solid ${BORDER}`,
-  background: active ? BRAND : PAGE_BG,
+  background: active ? BRAND : '#fff',
   color: active ? '#fff' : TEXT_SECONDARY,
-  borderRadius: 20,
-  padding: '8px 16px',
+  borderRadius: 8,
+  padding: '4px 12px',
   fontSize: 13,
   fontWeight: 500,
   cursor: 'pointer',
@@ -95,19 +105,29 @@ export const tabActive = (active: boolean): CSSProperties => ({
 export const pillTab = (active: boolean): CSSProperties => ({
   borderRadius: 40,
   padding: '8px 20px',
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: active ? 600 : 500,
   cursor: 'pointer',
-  border: 'none',
-  background: active ? '#fff' : 'transparent',
-  color: active ? BRAND : TEXT_SECONDARY,
-  boxShadow: active ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+  border: active ? 'none' : `1px solid ${BORDER}`,
+  background: active ? BRAND : '#fff',
+  color: active ? '#fff' : TEXT_SECONDARY,
 })
 
 export const chartTooltipStyle = {
   background: '#fff',
   border: `1px solid ${BORDER}`,
   borderRadius: 12,
+  padding: '12px 16px',
   boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
   color: TEXT_PRIMARY,
+}
+
+export function pageHeaderAccent(): CSSProperties {
+  return {
+    width: 40,
+    height: 3,
+    background: `linear-gradient(90deg, ${BRAND}, ${BRAND_BLUE})`,
+    borderRadius: 40,
+    marginTop: 4,
+  }
 }

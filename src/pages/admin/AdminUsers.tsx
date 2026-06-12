@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AdminLayout } from '../../components/AdminLayout'
 import { AdminAvatar } from '../../components/admin/AdminAvatar'
 import { AdminToast } from '../../components/admin/AdminToast'
-import { BRAND, BRAND_BLUE, BORDER, cardStyle, inputStyle, outlineBtn, PAGE_BG, primaryBtn, tableHeaderStyle, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
+import { BRAND, BRAND_BLUE, BORDER, cardStyle, hoverCardProps, inputStyle, outlineBtn, PAGE_BG, primaryBtn, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
 import { MOCK_USERS, type AdminUser } from '../../data/adminMockData'
 
 function randomPassword(len = 12): string {
@@ -43,97 +43,139 @@ export default function AdminUsers() {
     <AdminLayout activePath="/admin/users" title="Operation Users">
       <AdminToast message={toast} onClose={() => setToast(null)} />
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <p style={{ margin: 0, fontSize: 14, color: TEXT_SECONDARY }}>{users.length} operation users</p>
         <button type="button" onClick={() => { setShowCreate(true); setCreated(null); setForm({ name: '', email: '', phone: '' }) }} style={primaryBtn}>+ Create User</button>
       </div>
 
-      <div style={{ ...cardStyle, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #f8f9fc' }}>
-              {['User', 'Email', 'Username', 'Role', 'Status', 'Created', 'Last Login', 'Actions'].map((h) => (
-                <th key={h} style={tableHeaderStyle}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} style={{ borderBottom: '1px solid #f8f9fc', color: TEXT_PRIMARY }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#fafafe' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <td style={{ padding: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <AdminAvatar name={u.name} />
-                    <span style={{ fontWeight: 600 }}>{u.name}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+        {users.map((u) => (
+          <div
+            key={u.id}
+            style={{
+              ...cardStyle,
+              padding: 0,
+              overflow: 'hidden',
+              ...hoverCardProps.style,
+            }}
+            onMouseEnter={hoverCardProps.onMouseEnter}
+            onMouseLeave={hoverCardProps.onMouseLeave}
+          >
+            <div style={{ height: 4, background: `linear-gradient(90deg, ${BRAND}, ${BRAND_BLUE})` }} />
+            <div style={{ padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <AdminAvatar name={u.name} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: TEXT_PRIMARY }}>{u.name}</div>
+                    <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2 }}>{u.role}</div>
                   </div>
-                </td>
-                <td style={{ padding: 16, color: TEXT_SECONDARY }}>{u.email}</td>
-                <td style={{ padding: 16, fontFamily: 'monospace', fontSize: 13, color: TEXT_SECONDARY }}>{u.username}</td>
-                <td style={{ padding: 16 }}>{u.role}</td>
-                <td style={{ padding: 16 }}>
-                  <button type="button" onClick={() => toggleStatus(u.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
-                    <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, background: u.status === 'Active' ? '#f0fff4' : PAGE_BG, color: u.status === 'Active' ? '#22c55e' : TEXT_MUTED, border: `1px solid ${u.status === 'Active' ? '#bbf7d0' : BORDER}` }}>{u.status}</span>
-                  </button>
-                </td>
-                <td style={{ padding: 16, color: TEXT_MUTED }}>{u.created}</td>
-                <td style={{ padding: 16, color: TEXT_MUTED }}>{u.lastLogin}</td>
-                <td style={{ padding: 16 }}>
-                  <button type="button" style={{ border: 'none', background: 'none', color: BRAND, cursor: 'pointer', marginRight: 8, fontSize: 13 }}>Edit</button>
-                  <button type="button" onClick={() => { setShowReset(u); setResetPwd(''); setShowResetPwd(false) }} style={{ border: 'none', background: 'none', color: TEXT_SECONDARY, cursor: 'pointer', marginRight: 8, fontSize: 13 }}>Reset Password</button>
-                  <button type="button" onClick={() => toggleStatus(u.id)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13 }}>Deactivate</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+                <button type="button" onClick={() => toggleStatus(u.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
+                  <span style={{
+                    padding: '4px 10px',
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: u.status === 'Active' ? '#f0fff4' : PAGE_BG,
+                    color: u.status === 'Active' ? '#22c55e' : TEXT_MUTED,
+                    border: `1px solid ${u.status === 'Active' ? '#bbf7d0' : BORDER}`,
+                  }}>
+                    {u.status}
+                  </span>
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: TEXT_SECONDARY }}>
+                  <span style={{ fontSize: 14 }}>✉</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                  <span style={{ fontSize: 14 }}>👤</span>
+                  <span style={{ fontFamily: 'monospace', color: TEXT_SECONDARY, fontSize: 12 }}>{u.username}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 16, fontSize: 12, color: TEXT_MUTED, marginTop: 4 }}>
+                  <span>Created {u.created}</span>
+                  <span>Login {u.lastLogin}</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, borderTop: `1px solid ${BORDER}`, paddingTop: 16 }}>
+                <button type="button" style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#fff', color: BRAND, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Edit</button>
+                <button type="button" onClick={() => { setShowReset(u); setResetPwd(''); setShowResetPwd(false) }} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#fff', color: TEXT_SECONDARY, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Reset</button>
+                <button type="button" onClick={() => toggleStatus(u.id)} style={{ flex: 1, border: `1px solid #fecaca`, background: '#fff5f5', color: '#ef4444', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                  {u.status === 'Active' ? 'Deactivate' : 'Activate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {showCreate && (
         <>
-          <div role="presentation" onClick={() => setShowCreate(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000 }} />
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', ...cardStyle, padding: 32, maxWidth: 480, width: '90%', zIndex: 2001 }}>
-            {!created ? (
-              <>
-                <h3 style={{ margin: '0 0 20px' }}>Create User</h3>
-                <label style={{ display: 'block', fontSize: 13, color: TEXT_SECONDARY, marginBottom: 4 }}>Full Name *</label>
-                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ ...inputStyle, width: '100%', marginBottom: 12 }} />
-                <label style={{ display: 'block', fontSize: 13, color: TEXT_SECONDARY, marginBottom: 4 }}>Email *</label>
-                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ ...inputStyle, width: '100%', marginBottom: 12 }} />
-                <label style={{ display: 'block', fontSize: 13, color: TEXT_SECONDARY, marginBottom: 4 }}>Phone</label>
-                <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+971 50 000 0000" style={{ ...inputStyle, width: '100%', marginBottom: 12 }} />
-                <p style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 20 }}>Agents and customers have separate registration</p>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button type="button" onClick={() => setShowCreate(false)} style={{ ...outlineBtn, flex: 1 }}>Cancel</button>
-                  <button type="button" onClick={handleCreate} style={{ ...primaryBtn, flex: 1 }}>Create</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ background: 'linear-gradient(135deg, #f0fff4, #ecfdf5)', border: '1px solid #bbf7d0', borderRadius: 16, padding: 16, marginBottom: 20 }}>
-                  <div style={{ fontWeight: 700, color: '#22c55e', marginBottom: 12 }}>User Created Successfully</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13, background: '#fff', borderRadius: 12, padding: 14, border: `1px solid ${BORDER}` }}>
-                    <span style={{ fontFamily: 'monospace', flex: 1 }}>{created.username}</span>
-                    <button type="button" onClick={() => navigator.clipboard.writeText(created.username)} style={{ border: 'none', background: 'none', color: BRAND_BLUE, cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Copy</button>
+          <div role="presentation" onClick={() => setShowCreate(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 2000 }} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: '#fff', borderRadius: 20, border: `1px solid ${BORDER}`, boxShadow: '0 24px 48px rgba(0,0,0,0.12)', maxWidth: 480, width: '90%', zIndex: 2001, overflow: 'hidden' }}>
+            <div style={{ height: 6, background: `linear-gradient(90deg, ${BRAND}, ${BRAND_BLUE})` }} />
+            <div style={{ padding: 32 }}>
+              {!created ? (
+                <>
+                  <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: TEXT_PRIMARY }}>Create User</h3>
+                  <p style={{ margin: '0 0 24px', fontSize: 13, color: TEXT_SECONDARY }}>Add a new operations team member</p>
+                  <label style={{ display: 'block', fontSize: 13, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>Full Name *</label>
+                  <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ ...inputStyle, width: '100%', marginBottom: 16 }} />
+                  <label style={{ display: 'block', fontSize: 13, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>Email *</label>
+                  <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ ...inputStyle, width: '100%', marginBottom: 16 }} />
+                  <label style={{ display: 'block', fontSize: 13, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>Phone</label>
+                  <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+971 50 000 0000" style={{ ...inputStyle, width: '100%', marginBottom: 12 }} />
+                  <p style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 24 }}>B2B Partners and B2C users have separate registration</p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" onClick={() => setShowCreate(false)} style={{ ...outlineBtn, flex: 1 }}>Cancel</button>
+                    <button type="button" onClick={handleCreate} style={{ ...primaryBtn, flex: 1 }}>Create</button>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, background: '#fff', borderRadius: 12, padding: 14, border: `1px solid ${BORDER}` }}>
-                    <span style={{ fontFamily: 'monospace', flex: 1 }}>{showPwd ? created.password : '••••••••••'}</span>
-                    <button type="button" onClick={() => setShowPwd((s) => !s)} style={{ border: 'none', background: 'none', color: TEXT_SECONDARY, cursor: 'pointer', fontSize: 12 }}>{showPwd ? 'Hide' : 'Show'}</button>
-                    <button type="button" onClick={() => navigator.clipboard.writeText(created.password)} style={{ border: 'none', background: 'none', color: BRAND_BLUE, cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Copy</button>
+                </>
+              ) : (
+                <>
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f0fff4 0%, #ecfdf5 50%, #d1fae5 100%)',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: 16,
+                    padding: 20,
+                    marginBottom: 24,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18 }}>✓</div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#16a34a', fontSize: 15 }}>User Created Successfully</div>
+                        <div style={{ fontSize: 12, color: '#15803d', marginTop: 2 }}>Share credentials securely with the user</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Username</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, background: '#fff', borderRadius: 12, padding: 14, border: `1px solid ${BORDER}` }}>
+                      <span style={{ fontFamily: 'monospace', flex: 1, color: TEXT_PRIMARY }}>{created.username}</span>
+                      <button type="button" onClick={() => navigator.clipboard.writeText(created.username)} style={{ border: 'none', background: 'none', color: BRAND_BLUE, cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Copy</button>
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Password</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, background: '#fff', borderRadius: 12, padding: 14, border: `1px solid ${BORDER}` }}>
+                      <span style={{ fontFamily: 'monospace', flex: 1, color: TEXT_PRIMARY }}>{showPwd ? created.password : '••••••••••'}</span>
+                      <button type="button" onClick={() => setShowPwd((s) => !s)} style={{ border: 'none', background: 'none', color: TEXT_SECONDARY, cursor: 'pointer', fontSize: 12 }}>{showPwd ? 'Hide' : 'Show'}</button>
+                      <button type="button" onClick={() => navigator.clipboard.writeText(created.password)} style={{ border: 'none', background: 'none', color: BRAND_BLUE, cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Copy</button>
+                    </div>
                   </div>
-                </div>
-                <button type="button" onClick={() => setShowCreate(false)} style={{ ...primaryBtn, width: '100%' }}>Done</button>
-              </>
-            )}
+                  <button type="button" onClick={() => setShowCreate(false)} style={{ ...primaryBtn, width: '100%' }}>Done</button>
+                </>
+              )}
+            </div>
           </div>
         </>
       )}
 
       {showReset && (
         <>
-          <div role="presentation" onClick={() => setShowReset(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000 }} />
+          <div role="presentation" onClick={() => setShowReset(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 2000 }} />
           <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', ...cardStyle, padding: 32, maxWidth: 400, width: '90%', zIndex: 2001 }}>
-            <h3 style={{ margin: '0 0 8px' }}>Reset Password</h3>
+            <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: TEXT_PRIMARY }}>Reset Password</h3>
             <p style={{ fontSize: 13, color: TEXT_SECONDARY, marginBottom: 20 }}>{showReset.name}</p>
             <button type="button" onClick={() => setResetPwd(randomPassword())} style={{ ...outlineBtn, width: '100%', marginBottom: 12 }}>Generate New Password</button>
             <div style={{ position: 'relative', marginBottom: 12 }}>

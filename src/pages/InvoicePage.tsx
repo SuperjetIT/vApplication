@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { SiteFooter } from '../components/SiteFooter'
+import { findInvoiceByNo, getEffectiveInvoiceStatus } from '../utils/adminInvoiceUtils'
 import { flagUrl } from '../utils/flags'
 
 const BRAND = '#f93e42'
@@ -108,21 +109,40 @@ export default function InvoicePage() {
   const [showConfetti, setShowConfetti] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
 
-  const status = searchParams.get('status') === 'failed' ? 'failed' : 'success'
-  const isSuccess = status === 'success'
+  const invoiceNoParam = searchParams.get('no') ?? searchParams.get('invoiceNo')
+  const storedInvoice = invoiceNoParam ? findInvoiceByNo(invoiceNoParam) : undefined
+  const effectiveStatus = storedInvoice
+    ? getEffectiveInvoiceStatus(storedInvoice)
+    : null
 
-  const name = searchParams.get('name') ?? 'Guest Traveler'
-  const amount = Number.parseInt(searchParams.get('amount') ?? '0', 10)
-  const country = searchParams.get('country') ?? '—'
+  const statusParam = searchParams.get('status')?.toLowerCase()
+  const displayStatus = effectiveStatus
+    ?? (statusParam === 'paid' || statusParam === 'success' ? 'PAID'
+      : statusParam === 'refunded' ? 'REFUNDED'
+        : statusParam === 'overdue' ? 'OVERDUE'
+          : statusParam === 'failed' ? 'FAILED'
+            : statusParam === 'unpaid' ? 'UNPAID'
+              : 'PAID')
+
+  const isPaid = displayStatus === 'PAID'
+  const isRefunded = displayStatus === 'REFUNDED'
+  const isFailed = displayStatus === 'FAILED'
+  const isOverdue = displayStatus === 'OVERDUE'
+  const isSuccess = isPaid
+
+  const name = searchParams.get('name') ?? storedInvoice?.customer ?? 'Guest Traveler'
+  const amount = Number.parseInt(searchParams.get('amount') ?? String(storedInvoice?.amount ?? 0), 10)
+  const country = searchParams.get('country') ?? storedInvoice?.destination ?? '—'
   const option = searchParams.get('option') ?? 'Visa'
-  const invoiceNo =
-    searchParams.get('invoiceNo') ?? `ATL${Date.now().toString().slice(-8)}`
-  const date = searchParams.get('date') ?? new Date().toLocaleDateString('en-GB')
+  const invoiceNo = invoiceNoParam ?? `ATL${Date.now().toString().slice(-8)}`
+  const date = searchParams.get('date') ?? storedInvoice?.date ?? new Date().toLocaleDateString('en-GB')
+  const dueDate = searchParams.get('dueDate') ?? storedInvoice?.dueDate ?? date
   const travelers = Number.parseInt(searchParams.get('travelers') ?? '1', 10)
-  const govFee = Number.parseInt(searchParams.get('govFee') ?? '0', 10)
-  const processingFee = Number.parseInt(searchParams.get('processingFee') ?? '99', 10)
+  const govFee = Number.parseInt(searchParams.get('govFee') ?? String(storedInvoice?.govFee ?? 0), 10)
+  const processingFee = Number.parseInt(searchParams.get('processingFee') ?? String(storedInvoice?.processingFee ?? 99), 10)
   const discount = Number.parseInt(searchParams.get('discount') ?? '0', 10)
-  const countryCode = searchParams.get('countryCode') ?? 'ae'
+  const countryCode = searchParams.get('countryCode') ?? storedInvoice?.countryCode ?? 'ae'
+  const paymentMethod = searchParams.get('paymentMethod') ?? storedInvoice?.paymentMethod ?? 'Card'
   const subtotalParam = searchParams.get('subtotal')
 
   const govTotal = govFee * travelers
@@ -182,9 +202,13 @@ export default function InvoicePage() {
           >
             <div
               style={{
-                background: isSuccess
+                background: isPaid
                   ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                  : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  : isRefunded
+                    ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)'
+                    : isOverdue
+                      ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                      : 'linear-gradient(135deg, #ef4444, #dc2626)',
                 padding: '20px 32px',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -194,12 +218,12 @@ export default function InvoicePage() {
               }}
             >
               <p style={{ margin: 0, color: '#fff', fontWeight: 700, fontSize: 18 }}>
-                {isSuccess ? '✓ PAYMENT SUCCESSFUL' : '✕ PAYMENT FAILED'}
+                {isPaid ? '✓ PAYMENT SUCCESSFUL' : isRefunded ? '↩ PAYMENT REFUNDED' : isOverdue ? '⚠ PAYMENT OVERDUE' : isFailed ? '✕ PAYMENT FAILED' : '⏱ PAYMENT PENDING'}
               </p>
               <span
                 style={{
                   background: '#fff',
-                  color: isSuccess ? GREEN : RED,
+                  color: isPaid ? GREEN : isRefunded ? '#8b5cf6' : isOverdue ? '#d97706' : RED,
                   borderRadius: 8,
                   padding: '6px 16px',
                   fontWeight: 700,
@@ -207,7 +231,7 @@ export default function InvoicePage() {
                   letterSpacing: '0.04em',
                 }}
               >
-                {isSuccess ? 'PAID' : 'UNPAID'}
+                {displayStatus === 'FAILED' ? 'FAILED' : displayStatus}
               </span>
             </div>
 
@@ -281,7 +305,9 @@ export default function InvoicePage() {
                   <p style={{ margin: '0 0 4px', fontSize: 12, color: '#888' }}>Invoice Date:</p>
                   <p style={{ margin: '0 0 12px', fontSize: 14 }}>{date}</p>
                   <p style={{ margin: '0 0 4px', fontSize: 12, color: '#888' }}>Due Date:</p>
-                  <p style={{ margin: '0 0 12px', fontSize: 14 }}>{date}</p>
+                  <p style={{ margin: '0 0 12px', fontSize: 14 }}>{dueDate}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#888' }}>Payment Method:</p>
+                  <p style={{ margin: '0 0 12px', fontSize: 14 }}>{paymentMethod}</p>
                   <p style={{ margin: '0 0 6px', fontSize: 12, color: '#888' }}>Status:</p>
                   <span
                     style={{
@@ -290,11 +316,11 @@ export default function InvoicePage() {
                       borderRadius: 20,
                       fontSize: 12,
                       fontWeight: 700,
-                      background: isSuccess ? '#dcfce7' : '#fee2e2',
-                      color: isSuccess ? GREEN : RED,
+                      background: isPaid ? '#dcfce7' : isRefunded ? '#ede9fe' : isOverdue ? '#fef3c7' : '#fee2e2',
+                      color: isPaid ? GREEN : isRefunded ? '#7c3aed' : isOverdue ? '#d97706' : RED,
                     }}
                   >
-                    {isSuccess ? 'PAID' : 'UNPAID'}
+                    {displayStatus === 'FAILED' ? 'FAILED' : displayStatus}
                   </span>
                 </div>
               </div>
@@ -359,7 +385,7 @@ export default function InvoicePage() {
                     color: isSuccess ? GREEN : RED,
                   }}
                 >
-                  {isSuccess ? 'Total Paid' : 'Total Due'}: AED {grandTotal}
+                  {isPaid ? 'Total Paid' : 'Total Due'}: AED {grandTotal}
                 </p>
               </div>
 
@@ -419,7 +445,7 @@ export default function InvoicePage() {
                 gap: 12,
               }}
             >
-              {isSuccess ? (
+              {isPaid ? (
                 <button
                   type="button"
                   onClick={() => window.print()}

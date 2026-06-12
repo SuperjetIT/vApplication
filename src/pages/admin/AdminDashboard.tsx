@@ -1,50 +1,29 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Link, useNavigate } from 'react-router-dom'
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AdminLayout } from '../../components/AdminLayout'
 import { AdminAvatar } from '../../components/admin/AdminAvatar'
-import { BRAND, BORDER, cardStyle, chartTooltipStyle, PAGE_BG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
-import { MOCK_ACTIVITIES, MOCK_AGENTS, MOCK_LEADS, PIPELINE_STAGES, PENDING_ACTIONS, REVENUE_CHART_DATA, getStatusColor } from '../../data/adminMockData'
+import { BRAND, BORDER, cardStyle, chartTooltipStyle, hoverCardProps, PAGE_BG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
+import { DESTINATION_DEMAND, MOCK_ACTIVITIES, MOCK_LEADS, PIPELINE_STAGES, PENDING_ACTIONS, REVENUE_CHART_DATA, getStatusColor } from '../../data/adminMockData'
+import { getOverdueSummary, loadInvoices } from '../../utils/adminInvoiceUtils'
 
 const STAT_CARDS = [
-  { label: 'Revenue Today', value: 'AED 4,200', trend: '+12%', up: true, gradient: 'linear-gradient(135deg, #f93e42, #ff8c69)', spark: 'M0,20 L12,16 L24,18 L36,12 L48,14 L60,10 L72,12 L80,8', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg> },
-  { label: 'Monthly Revenue', value: 'AED 38,500', trend: '+8%', up: true, gradient: 'linear-gradient(135deg, #5057ea, #818cf8)', spark: 'M0,16 L12,14 L24,10 L36,14 L48,8 L60,10 L72,6 L80,4', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg> },
-  { label: 'Total Leads', value: '284', trend: '+24', up: true, gradient: 'linear-gradient(135deg, #f59e0b, #fcd34d)', spark: 'M0,18 L12,14 L24,16 L36,10 L48,12 L60,8 L72,10 L80,6', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
-  { label: 'Active Cases', value: '47', trend: '12', up: false, gradient: 'linear-gradient(135deg, #22c55e, #86efac)', spark: 'M0,8 L12,10 L24,12 L36,14 L48,12 L60,14 L72,16 L80,18', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg> },
-  { label: 'Pending Payments', value: 'AED 8,200', trend: '14', up: false, gradient: 'linear-gradient(135deg, #ef4444, #fca5a5)', spark: 'M0,10 L12,12 L24,14 L36,12 L48,16 L60,14 L72,16 L80,18', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg> },
-  { label: 'Approval Rate', value: '94%', trend: '+3%', up: true, gradient: 'linear-gradient(135deg, #8b5cf6, #c4b5fd)', spark: 'M0,18 L12,16 L24,12 L36,10 L48,8 L60,6 L72,4 L80,2', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polyline points="8 17 12 21 16 17" /><line x1="12" y1="12" x2="12" y2="21" /><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29" /></svg> },
-]
-
-const LEAD_SOURCES = [
-  { name: 'Direct', value: 45, color: '#f93e42' },
-  { name: 'Agent B2B', value: 30, color: '#5057ea' },
-  { name: 'Google', value: 15, color: '#f59e0b' },
-  { name: 'WhatsApp', value: 10, color: '#22c55e' },
+  { label: 'Revenue Today', value: 'AED 4,200', change: '↑ +12% vs yesterday', up: true, iconBg: 'linear-gradient(135deg,#fff0f0,#ffe4e4)', iconColor: BRAND, spark: 'M0,20 10,15 20,18 30,8 40,12 50,5 60,8' },
+  { label: 'This Month', value: 'AED 38,500', change: '↑ +8% vs last month', up: true, iconBg: 'linear-gradient(135deg,#f0f0ff,#e4e4ff)', iconColor: '#5057ea', spark: 'M0,16 10,14 20,10 30,14 40,8 50,10 60,6' },
+  { label: 'Total Applications', value: '284', change: '↑ +24 this week', up: true, iconBg: 'linear-gradient(135deg,#fff8e1,#fff3c4)', iconColor: '#f59e0b', spark: 'M0,18 10,14 20,16 30,10 40,12 50,8 60,10' },
+  { label: 'Active Applications', value: '47', change: '12 need action', up: false, iconBg: 'linear-gradient(135deg,#fff0f0,#ffe4e4)', iconColor: '#ef4444', spark: 'M0,8 10,10 20,12 30,14 40,12 50,14 60,16' },
+  { label: 'Approved Visas', value: '198', change: '↑ 94% rate', up: true, iconBg: 'linear-gradient(135deg,#f0fff4,#dcfce7)', iconColor: '#22c55e', spark: 'M0,18 10,16 20,12 30,10 40,8 50,6 60,4' },
+  { label: 'Top B2B Partners', value: '12', change: '↑ +2 this month', up: true, iconBg: 'linear-gradient(135deg,#f5f0ff,#ede9fe)', iconColor: '#8b5cf6', spark: 'M0,16 10,14 20,12 30,10 40,8 50,6 60,4' },
 ]
 
 const STAGE_COLORS: Record<string, string> = {
-  'New Lead': '#5057ea', Contacted: '#818cf8', Qualified: '#f59e0b', 'Payment Pending': '#f97316',
-  'Docs Pending': '#ef4444', 'Under Review': '#ec4899', Submitted: '#8b5cf6', Approved: '#22c55e',
+  'New Application': '#5057ea', Contacted: '#06b6d4', Qualified: '#8b5cf6', 'Payment Pending': '#f59e0b',
+  'Docs Pending': '#f97316', 'Under Review': BRAND, Submitted: '#ec4899', Approved: '#22c55e',
 }
-
-const ACTIVITY_STYLES: Record<string, { bg: string; color: string }> = {
-  approved: { bg: '#f0fff4', color: '#22c55e' },
-  rejected: { bg: '#fff0f0', color: '#ef4444' },
-  lead: { bg: '#eff6ff', color: '#3b82f6' },
-  payment: { bg: '#fff7ed', color: '#f97316' },
-  doc: { bg: '#f8f9fc', color: '#6b7280' },
-  agent: { bg: '#f5f3ff', color: '#8b5cf6' },
-}
-
-const RANK_GRADIENTS = [
-  'linear-gradient(135deg, #ffd700, #ffb800)',
-  'linear-gradient(135deg, #c0c0c0, #a0a0a0)',
-  'linear-gradient(135deg, #cd7f32, #b8692a)',
-]
 
 const maxPipeline = Math.max(...PIPELINE_STAGES.map((s) => s.count))
 
-function PipelineRow({ stage, count, color, delay }: { stage: string; count: number; color: string; delay: number }) {
+function PipelineBar({ stage, count, color, delay }: { stage: string; count: number; color: string; delay: number }) {
   const [width, setWidth] = useState(0)
   const pct = (count / maxPipeline) * 100
   useEffect(() => {
@@ -52,193 +31,185 @@ function PipelineRow({ stage, count, color, delay }: { stage: string; count: num
     return () => window.clearTimeout(t)
   }, [pct, delay])
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-      <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
-      <span style={{ color: TEXT_SECONDARY, fontSize: 13, width: 130, flexShrink: 0 }}>{stage}</span>
-      <div style={{ flex: 1, height: 8, background: PAGE_BG, borderRadius: 40, overflow: 'hidden' }}>
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 13, color: TEXT_SECONDARY }}>{stage}</span>
+        <span style={{ fontWeight: 700, fontSize: 13, color: TEXT_PRIMARY }}>{count}</span>
+      </div>
+      <div style={{ background: '#f0f0f0', borderRadius: 40, height: 8, overflow: 'hidden' }}>
         <div style={{ height: '100%', borderRadius: 40, background: color, width: `${width}%`, transition: 'width 1.2s ease' }} />
       </div>
-      <span style={{ color: TEXT_PRIMARY, fontWeight: 700, fontSize: 13, width: 40, textAlign: 'right' }}>{count}</span>
-      <span style={{ color: TEXT_MUTED, fontSize: 11, width: 36, textAlign: 'right' }}>{Math.round(pct)}%</span>
     </div>
   )
 }
 
 export default function AdminDashboard() {
-  const [chartRange, setChartRange] = useState<'1M' | '3M' | '6M' | '1Y'>('6M')
+  const navigate = useNavigate()
+  const [period, setPeriod] = useState<'3M' | '6M' | '1Y'>('6M')
+  const [resolvedActions, setResolvedActions] = useState<Set<string>>(new Set())
+  const chartData = period === '3M' ? REVENUE_CHART_DATA.slice(-3) : period === '1Y' ? REVENUE_CHART_DATA : REVENUE_CHART_DATA
   const recentLeads = MOCK_LEADS.slice(0, 5)
-  const topAgents = MOCK_AGENTS.slice(0, 3)
-  const chartData = chartRange === '3M' ? REVENUE_CHART_DATA.slice(-3) : chartRange === '1M' ? REVENUE_CHART_DATA.slice(-1) : REVENUE_CHART_DATA
+  const overdue = getOverdueSummary(loadInvoices())
 
   return (
     <AdminLayout activePath="/admin" title="Dashboard">
-      <style>{`@keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.2)} }`}</style>
+      <style>{`@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.2)}}`}</style>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: TEXT_PRIMARY }}>Good morning, Super Admin 👋</h2>
-          <p style={{ margin: '4px 0 0', color: TEXT_SECONDARY, fontSize: 14 }}>Here's what's happening with your visa platform today.</p>
-        </div>
-        <div style={{ background: '#fff8f8', border: '1px solid #fce7e7', borderRadius: 40, padding: '8px 20px' }}>
-          <span style={{ color: BRAND, fontSize: 13, fontWeight: 500 }}>284 total leads · AED 38,500 revenue</span>
+      {/* Hero banner */}
+      <div style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #2d1b69 50%, #f93e42 150%)', borderRadius: 24, padding: 32, marginBottom: 28, position: 'relative', overflow: 'hidden' }}>
+        <svg aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.4 }}>
+          <defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="rgba(255,255,255,0.1)" /></pattern></defs>
+          <rect width="100%" height="100%" fill="url(#dots)" />
+        </svg>
+        <div aria-hidden style={{ position: 'absolute', width: 300, height: 300, background: 'rgba(255,255,255,0.05)', borderRadius: '50%', top: -100, right: -50 }} />
+        <div aria-hidden style={{ position: 'absolute', width: 200, height: 200, background: 'rgba(249,62,66,0.1)', borderRadius: '50%', bottom: -80, right: 200 }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1, flexWrap: 'wrap', gap: 24 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: '#fff' }}>Good morning, Super Admin 👋</h2>
+            <p style={{ margin: '6px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: 15 }}>Here's what's happening with Super Visa today</p>
+            <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
+              {[`📋 47 Active Applications`, `💰 AED 4,200 Today`, `✅ 3 Approved`, `⚠ AED ${overdue.amount.toLocaleString()} Overdue`].map((p) => (
+                <span key={p} style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', borderRadius: 40, padding: '8px 16px', color: '#fff', fontSize: 13, fontWeight: 500 }}>{p}</span>
+              ))}
+            </div>
+          </div>
+          <div style={{ width: 160, height: 100, borderRadius: 16, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transform: 'rotate(-8deg)', padding: 16, color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: 700 }}>
+            <div style={{ width: 28, height: 20, background: 'rgba(255,255,255,0.3)', borderRadius: 4, marginBottom: 8 }} />
+            <div style={{ height: 2, background: 'rgba(255,255,255,0.2)', marginBottom: 4 }} />
+            <div style={{ height: 2, background: 'rgba(255,255,255,0.2)', width: '70%' }} />
+            <div style={{ marginTop: 12, letterSpacing: 2 }}>SUPER VISA</div>
+          </div>
         </div>
       </div>
 
+      {overdue.count > 0 && (
+        <div style={{ ...cardStyle, marginBottom: 20, borderLeft: `4px solid #ef4444`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <div style={{ fontWeight: 700, color: TEXT_PRIMARY }}>⚠ {overdue.count} Overdue Bank Transfer Invoice{overdue.count > 1 ? 's' : ''}</div>
+            <div style={{ fontSize: 14, color: TEXT_SECONDARY, marginTop: 4 }}>Total overdue: <strong style={{ color: '#ef4444' }}>AED {overdue.amount.toLocaleString()}</strong></div>
+          </div>
+          <button type="button" onClick={() => navigate('/admin/invoices')} style={{ background: '#fff0f0', border: `1px solid #fca5a5`, color: '#ef4444', borderRadius: 10, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>View Invoices →</button>
+        </div>
+      )}
+
+      {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20, marginBottom: 24 }}>
         {STAT_CARDS.map((c) => (
-          <div key={c.label} style={{ ...cardStyle, position: 'relative', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: c.gradient, opacity: 0.08 }} />
+          <div key={c.label} {...hoverCardProps} style={{ ...cardStyle, position: 'relative', overflow: 'hidden', ...hoverCardProps.style }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', background: c.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{c.icon}</div>
-              <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 8px', borderRadius: 20, background: c.up ? '#f0fff4' : '#fff0f0', color: c.up ? '#16a34a' : '#dc2626' }}>{c.up ? '↑' : '↓'} {c.trend}</span>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: c.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c.iconColor} strokeWidth="2"><circle cx="12" cy="12" r="4" /></svg>
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: c.up ? '#22c55e' : '#ef4444' }}>{c.change}</span>
             </div>
             <div style={{ fontSize: 32, fontWeight: 800, color: TEXT_PRIMARY, marginTop: 12 }}>{c.value}</div>
             <div style={{ fontSize: 13, color: TEXT_SECONDARY, marginTop: 4 }}>{c.label}</div>
-            <svg style={{ position: 'absolute', bottom: 16, right: 16, width: 80, height: 32 }} viewBox="0 0 80 32">
-              <path d={c.spark} fill="none" stroke={c.up ? '#22c55e' : '#ef4444'} strokeWidth="2" strokeLinecap="round" opacity={0.4} />
+            <svg style={{ position: 'absolute', bottom: 16, right: 16, width: 60, height: 24 }} viewBox="0 0 60 24">
+              <polyline points={c.spark} fill="none" stroke={c.iconColor} strokeWidth="2" opacity={0.4} />
             </svg>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, marginBottom: 24 }}>
+      {/* Charts row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.85fr 1fr', gap: 24, marginBottom: 24 }}>
         <div style={cardStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <h3 style={{ margin: 0, fontWeight: 700, color: TEXT_PRIMARY }}>Revenue Overview</h3>
             <div style={{ display: 'flex', gap: 6 }}>
-              {(['1M', '3M', '6M', '1Y'] as const).map((r) => (
-                <button key={r} type="button" onClick={() => setChartRange(r)} style={{ border: 'none', background: chartRange === r ? BRAND : 'transparent', color: chartRange === r ? '#fff' : TEXT_SECONDARY, borderRadius: 8, padding: '4px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>{r}</button>
+              {(['3M', '6M', '1Y'] as const).map((p) => (
+                <button key={p} type="button" onClick={() => setPeriod(p)} style={{ border: 'none', background: period === p ? BRAND : 'transparent', color: period === p ? '#fff' : TEXT_SECONDARY, borderRadius: 8, padding: '4px 12px', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>{p}</button>
               ))}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={240}>
             <BarChart data={chartData} barGap={4}>
-              <defs>
-                <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#f93e42" />
-                  <stop offset="100%" stopColor="#ff8c69" stopOpacity={0.6} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: TEXT_SECONDARY }} />
-              <YAxis tick={{ fontSize: 12, fill: TEXT_SECONDARY }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 12, fill: TEXT_MUTED }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: TEXT_MUTED }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={chartTooltipStyle} />
-              <Bar dataKey="revenue" fill="url(#revenueGradient)" radius={[6, 6, 0, 0]} name="Revenue" />
-              <Bar dataKey="target" fill="#f0f0f5" radius={[6, 6, 0, 0]} name="Target" />
+              <Bar dataKey="revenue" fill={BRAND} radius={[4, 4, 0, 0]} name="Revenue" />
+              <Bar dataKey="target" fill="#f0f0f0" radius={[4, 4, 0, 0]} name="Target" />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-
-        <div style={{ ...cardStyle, position: 'relative' }}>
-          <h3 style={{ margin: '0 0 16px', fontWeight: 700, color: TEXT_PRIMARY }}>Lead Sources</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={LEAD_SOURCES} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={4}>
-                {LEAD_SOURCES.map((s) => <Cell key={s.name} fill={s.color} />)}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -20%)', textAlign: 'center', pointerEvents: 'none' }}>
-            <div style={{ fontSize: 24, fontWeight: 800, color: TEXT_PRIMARY }}>284</div>
-            <div style={{ fontSize: 12, color: TEXT_SECONDARY }}>Leads</div>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
-            {LEAD_SOURCES.map((s) => (
-              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: TEXT_SECONDARY }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color }} />
-                {s.name} ({s.value}%)
-              </div>
-            ))}
+          <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
+            <span style={{ fontSize: 12, color: TEXT_SECONDARY }}>● Revenue <span style={{ color: BRAND }}>■</span></span>
+            <span style={{ fontSize: 12, color: TEXT_MUTED }}>● Target</span>
           </div>
         </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
         <div style={cardStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontWeight: 700, color: TEXT_PRIMARY }}>Lead Pipeline</h3>
-            <span style={{ fontSize: 12, color: TEXT_MUTED }}>This Month</span>
-          </div>
+          <h3 style={{ margin: '0 0 4px', fontWeight: 700, color: TEXT_PRIMARY }}>Application Pipeline</h3>
+          <p style={{ margin: '0 0 16px', fontSize: 13, color: TEXT_SECONDARY }}>Current stage distribution</p>
           {PIPELINE_STAGES.map((s, i) => (
-            <PipelineRow key={s.stage} stage={s.stage} count={s.count} color={STAGE_COLORS[s.stage] ?? '#5057ea'} delay={i * 80} />
+            <PipelineBar key={s.stage} stage={s.stage} count={s.count} color={STAGE_COLORS[s.stage] ?? '#5057ea'} delay={i * 80} />
           ))}
         </div>
-
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontWeight: 700, color: TEXT_PRIMARY }}>Live Activity</h3>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', animation: 'livePulse 2s infinite' }} />
-            <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>LIVE</span>
-          </div>
-          <div style={{ maxHeight: 340, overflowY: 'auto' }}>
-            {MOCK_ACTIVITIES.map((a) => {
-              const st = ACTIVITY_STYLES[a.type] ?? ACTIVITY_STYLES.doc
-              return (
-                <div key={a.id} style={{ display: 'flex', gap: 12, padding: 12, borderRadius: 12, transition: 'background 0.15s' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = PAGE_BG }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: st.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ color: st.color, fontSize: 14 }}>●</span>
-                  </div>
-                  <div>
-                    <div style={{ color: TEXT_PRIMARY, fontSize: 13, fontWeight: 500 }}>{a.text}</div>
-                    <div style={{ color: TEXT_MUTED, fontSize: 11, marginTop: 2 }}>{a.time}</div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 24 }}>
-        <div style={{ ...cardStyle, padding: 20 }}>
+      {/* Bottom 3 cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, marginBottom: 24 }}>
+        <div style={cardStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: TEXT_PRIMARY }}>Recent Leads</h3>
-            <Link to="/admin/leads" style={{ color: BRAND, fontSize: 13, textDecoration: 'none' }}>View all →</Link>
+            <h3 style={{ margin: 0, fontWeight: 700, fontSize: 15, color: TEXT_PRIMARY }}>Recent Applications</h3>
+            <Link to="/admin/leads" style={{ color: BRAND, fontSize: 13, textDecoration: 'none', fontWeight: 500 }}>View all →</Link>
           </div>
           {recentLeads.map((lead) => {
             const sc = getStatusColor(lead.status)
             return (
-              <div key={lead.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: `1px solid ${PAGE_BG}` }}>
+              <div key={lead.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #f5f5f5' }}>
                 <AdminAvatar name={lead.name} size={36} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: TEXT_PRIMARY, fontSize: 13, fontWeight: 500 }}>{lead.name}</div>
-                  <div style={{ color: TEXT_SECONDARY, fontSize: 12 }}>{lead.destination}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: TEXT_PRIMARY }}>{lead.name}</div>
+                  <div style={{ fontSize: 12, color: TEXT_SECONDARY }}>{lead.email}</div>
                 </div>
-                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>{lead.status}</span>
-                <span style={{ color: TEXT_MUTED, fontSize: 11, whiteSpace: 'nowrap' }}>{lead.created}</span>
+                <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>{lead.status}</span>
               </div>
             )
           })}
         </div>
-
-        <div style={{ ...cardStyle, padding: 20, background: '#fff8f8' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: TEXT_PRIMARY }}>Needs Action</h3>
-            <span style={{ background: '#ef4444', color: TEXT_PRIMARY, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{PENDING_ACTIONS.length}</span>
-          </div>
-          {PENDING_ACTIONS.map((a) => (
-            <div key={a.issue} style={{ borderRadius: 12, padding: 12, marginBottom: 8, background: '#fff', border: '1px solid #fee2e2', borderLeft: '3px solid #f93e42' }}>
-              <div style={{ color: TEXT_PRIMARY, fontWeight: 700, fontSize: 13 }}>{a.issue}</div>
-              <div style={{ color: TEXT_SECONDARY, fontSize: 12, marginTop: 2 }}>{a.customer} — {a.destination}</div>
-              <div style={{ color: BRAND, fontSize: 11, fontWeight: 600, marginTop: 4 }}>Action required</div>
+        <div style={{ ...cardStyle, background: '#fff8f8' }}>
+          <h3 style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 15, color: TEXT_PRIMARY }}>Needs Action</h3>
+          {PENDING_ACTIONS.filter((a) => !resolvedActions.has(a.issue)).map((a) => (
+            <div key={a.issue} style={{ background: '#fff', borderRadius: 12, padding: 14, marginBottom: 8, borderLeft: `3px solid ${BRAND}` }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: TEXT_PRIMARY }}>{a.issue}</div>
+              <div style={{ fontSize: 12, color: TEXT_SECONDARY, marginTop: 2 }}>{a.customer} — {a.destination}</div>
+              <button type="button" onClick={() => setResolvedActions((s) => new Set(s).add(a.issue))} style={{ marginTop: 8, background: 'transparent', border: `1px solid ${BRAND}`, color: BRAND, borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Resolve</button>
             </div>
           ))}
+          {PENDING_ACTIONS.every((a) => resolvedActions.has(a.issue)) && (
+            <p style={{ fontSize: 13, color: TEXT_MUTED, margin: 0 }}>All caught up! 🎉</p>
+          )}
         </div>
+        <div style={cardStyle}>
+          <h3 style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 15, color: TEXT_PRIMARY }}>Country Demand</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={DESTINATION_DEMAND} layout="vertical" margin={{ left: 10 }}>
+              <XAxis type="number" tick={{ fontSize: 11, fill: TEXT_MUTED }} />
+              <YAxis type="category" dataKey="country" width={80} tick={{ fontSize: 11, fill: TEXT_PRIMARY }} tickFormatter={(v, i) => `${DESTINATION_DEMAND[i]?.flag ?? ''} ${v}`} />
+              <Tooltip contentStyle={chartTooltipStyle} />
+              <Bar dataKey="applications" radius={[0, 4, 4, 0]}>
+                {DESTINATION_DEMAND.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? BRAND : '#5057ea'} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
-        <div style={{ ...cardStyle, padding: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: TEXT_PRIMARY }}>Top Agents</h3>
-          {topAgents.map((agent, i) => (
-            <div key={agent.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: `1px solid ${PAGE_BG}` }}>
-              <span style={{ width: 24, height: 24, borderRadius: '50%', background: RANK_GRADIENTS[i], color: TEXT_PRIMARY, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
-              <AdminAvatar name={agent.name} size={32} />
-              <div style={{ flex: 1 }}>
-                <div style={{ color: TEXT_PRIMARY, fontSize: 13, fontWeight: 500 }}>{agent.name}</div>
-                <div style={{ color: TEXT_SECONDARY, fontSize: 12 }}>{agent.leads} leads</div>
+      {/* Activity feed */}
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+          <h3 style={{ margin: 0, fontWeight: 700, color: TEXT_PRIMARY }}>Live Activity</h3>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', animation: 'livePulse 2s infinite' }} />
+          <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>LIVE</span>
+        </div>
+        <div style={{ borderLeft: `2px solid ${BORDER}`, paddingLeft: 24, marginLeft: 18 }}>
+          {MOCK_ACTIVITIES.slice(0, 7).map((a) => (
+            <div key={a.id} style={{ display: 'flex', gap: 16, marginBottom: 20, position: 'relative' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: PAGE_BG, border: `1px solid ${BORDER}`, position: 'absolute', left: -43, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>●</div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: TEXT_PRIMARY }}>{a.text}</div>
+                <div style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2 }}>{a.time}</div>
               </div>
-              <span style={{ color: BRAND, fontWeight: 700, fontSize: 13 }}>AED {agent.revenue.toLocaleString()}</span>
             </div>
           ))}
         </div>

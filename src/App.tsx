@@ -28,6 +28,8 @@ import AdminReports from './pages/admin/AdminReports'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminCaseDetail from './pages/admin/AdminCaseDetail'
+import NotFoundPage from './pages/NotFoundPage'
+import { ADMIN_LOGIN_PATH, ADMIN_LOGIN_PATH_LEGACY } from './config/adminRoutes'
 
 const BRAND = '#f93e42'
 
@@ -91,7 +93,7 @@ function CookiesBanner({ onAccept }: { onAccept: () => void }) {
 function AppContent() {
   const { isModalOpen } = useCitizenship()
   const location = useLocation()
-  const isAdminRoute = location.pathname.startsWith('/admin')
+  const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname === ADMIN_LOGIN_PATH
   const [cookiesAccepted, setCookiesAccepted] = useState(
     () => localStorage.getItem('cookies_accepted') === 'true',
   )
@@ -117,7 +119,8 @@ function AppContent() {
         <Route path="/sign-in/verify" element={<OtpVerifyPage />} />
         <Route path="/user/me" element={<UserMePage />} />
         <Route path="/user/me/applications/:applicationId" element={<UserApplicationPage />} />
-        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
+        <Route path={ADMIN_LOGIN_PATH_LEGACY} element={<NotFoundPage />} />
         <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
         <Route path="/admin/leads" element={<AdminGuard><AdminLeads /></AdminGuard>} />
         <Route path="/admin/customers" element={<AdminGuard><AdminCustomers /></AdminGuard>} />
