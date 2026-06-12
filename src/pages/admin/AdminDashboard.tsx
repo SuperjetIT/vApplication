@@ -6,6 +6,8 @@ import { AdminAvatar } from '../../components/admin/AdminAvatar'
 import { BRAND, BORDER, cardStyle, chartTooltipStyle, hoverCardProps, PAGE_BG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
 import { DESTINATION_DEMAND, MOCK_ACTIVITIES, MOCK_LEADS, PIPELINE_STAGES, PENDING_ACTIONS, REVENUE_CHART_DATA, getStatusColor } from '../../data/adminMockData'
 import { getOverdueSummary, loadInvoices } from '../../utils/adminInvoiceUtils'
+import { usePortalBase } from '../../hooks/usePortalBase'
+import { getPortalUser } from '../../utils/portalAuth'
 
 const STAT_CARDS = [
   { label: 'Revenue Today', value: 'AED 4,200', change: '↑ +12% vs yesterday', up: true, iconBg: 'linear-gradient(135deg,#fff0f0,#ffe4e4)', iconColor: BRAND, spark: 'M0,20 10,15 20,18 30,8 40,12 50,5 60,8' },
@@ -22,6 +24,17 @@ const STAGE_COLORS: Record<string, string> = {
 }
 
 const maxPipeline = Math.max(...PIPELINE_STAGES.map((s) => s.count))
+
+function getTimeGreeting(date = new Date()): string {
+  const hour = date.getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function getAdminDisplayName(): string {
+  return getPortalUser()?.name?.trim() || 'Super Admin'
+}
 
 function PipelineBar({ stage, count, color, delay }: { stage: string; count: number; color: string; delay: number }) {
   const [width, setWidth] = useState(0)
@@ -45,18 +58,21 @@ function PipelineBar({ stage, count, color, delay }: { stage: string; count: num
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
+  const { path } = usePortalBase()
   const [period, setPeriod] = useState<'3M' | '6M' | '1Y'>('6M')
   const [resolvedActions, setResolvedActions] = useState<Set<string>>(new Set())
   const chartData = period === '3M' ? REVENUE_CHART_DATA.slice(-3) : period === '1Y' ? REVENUE_CHART_DATA : REVENUE_CHART_DATA
   const recentLeads = MOCK_LEADS.slice(0, 5)
   const overdue = getOverdueSummary(loadInvoices())
+  const greeting = getTimeGreeting()
+  const adminName = getAdminDisplayName()
 
   return (
     <AdminLayout activePath="/admin" title="Dashboard">
       <style>{`@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.2)}}`}</style>
 
       {/* Hero banner */}
-      <div style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #2d1b69 50%, #f93e42 150%)', borderRadius: 24, padding: 32, marginBottom: 28, position: 'relative', overflow: 'hidden' }}>
+      <div className="admin-hero" style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #2d1b69 50%, #f93e42 150%)', position: 'relative', overflow: 'hidden' }}>
         <svg aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.4 }}>
           <defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="rgba(255,255,255,0.1)" /></pattern></defs>
           <rect width="100%" height="100%" fill="url(#dots)" />
@@ -65,19 +81,19 @@ export default function AdminDashboard() {
         <div aria-hidden style={{ position: 'absolute', width: 200, height: 200, background: 'rgba(249,62,66,0.1)', borderRadius: '50%', bottom: -80, right: 200 }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1, flexWrap: 'wrap', gap: 24 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: '#fff' }}>Good morning, Super Admin 👋</h2>
-            <p style={{ margin: '6px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: 15 }}>Here's what's happening with Super Visa today</p>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#fff' }}>{greeting}, {adminName} 👋</h2>
+            <p style={{ margin: '6px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Here's what's happening with Superjet Global today</p>
             <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
               {[`📋 47 Active Applications`, `💰 AED 4,200 Today`, `✅ 3 Approved`, `⚠ AED ${overdue.amount.toLocaleString()} Overdue`].map((p) => (
                 <span key={p} style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', borderRadius: 40, padding: '8px 16px', color: '#fff', fontSize: 13, fontWeight: 500 }}>{p}</span>
               ))}
             </div>
           </div>
-          <div style={{ width: 160, height: 100, borderRadius: 16, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transform: 'rotate(-8deg)', padding: 16, color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: 700 }}>
+          <div className="admin-hero-deco" style={{ width: 160, height: 100, borderRadius: 16, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transform: 'rotate(-8deg)', padding: 16, color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: 700 }}>
             <div style={{ width: 28, height: 20, background: 'rgba(255,255,255,0.3)', borderRadius: 4, marginBottom: 8 }} />
             <div style={{ height: 2, background: 'rgba(255,255,255,0.2)', marginBottom: 4 }} />
             <div style={{ height: 2, background: 'rgba(255,255,255,0.2)', width: '70%' }} />
-            <div style={{ marginTop: 12, letterSpacing: 2 }}>SUPER VISA</div>
+            <div style={{ marginTop: 12, letterSpacing: 2 }}>SUPERJET</div>
           </div>
         </div>
       </div>
@@ -88,12 +104,12 @@ export default function AdminDashboard() {
             <div style={{ fontWeight: 700, color: TEXT_PRIMARY }}>⚠ {overdue.count} Overdue Bank Transfer Invoice{overdue.count > 1 ? 's' : ''}</div>
             <div style={{ fontSize: 14, color: TEXT_SECONDARY, marginTop: 4 }}>Total overdue: <strong style={{ color: '#ef4444' }}>AED {overdue.amount.toLocaleString()}</strong></div>
           </div>
-          <button type="button" onClick={() => navigate('/admin/invoices')} style={{ background: '#fff0f0', border: `1px solid #fca5a5`, color: '#ef4444', borderRadius: 10, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>View Invoices →</button>
+          <button type="button" onClick={() => navigate(path('/invoices'))} style={{ background: '#fff0f0', border: `1px solid #fca5a5`, color: '#ef4444', borderRadius: 10, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>View Invoices →</button>
         </div>
       )}
 
       {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20, marginBottom: 24 }}>
+      <div className="admin-stat-grid" style={{ marginBottom: 20 }}>
         {STAT_CARDS.map((c) => (
           <div key={c.label} {...hoverCardProps} style={{ ...cardStyle, position: 'relative', overflow: 'hidden', ...hoverCardProps.style }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -102,7 +118,7 @@ export default function AdminDashboard() {
               </div>
               <span style={{ fontSize: 12, fontWeight: 600, color: c.up ? '#22c55e' : '#ef4444' }}>{c.change}</span>
             </div>
-            <div style={{ fontSize: 32, fontWeight: 800, color: TEXT_PRIMARY, marginTop: 12 }}>{c.value}</div>
+            <div className="admin-stat-value" style={{ fontWeight: 800, color: TEXT_PRIMARY, marginTop: 12 }}>{c.value}</div>
             <div style={{ fontSize: 13, color: TEXT_SECONDARY, marginTop: 4 }}>{c.label}</div>
             <svg style={{ position: 'absolute', bottom: 16, right: 16, width: 60, height: 24 }} viewBox="0 0 60 24">
               <polyline points={c.spark} fill="none" stroke={c.iconColor} strokeWidth="2" opacity={0.4} />
@@ -112,7 +128,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Charts row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.85fr 1fr', gap: 24, marginBottom: 24 }}>
+      <div className="admin-grid-2" style={{ marginBottom: 20 }}>
         <div style={cardStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <h3 style={{ margin: 0, fontWeight: 700, color: TEXT_PRIMARY }}>Revenue Overview</h3>
@@ -147,11 +163,11 @@ export default function AdminDashboard() {
       </div>
 
       {/* Bottom 3 cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, marginBottom: 24 }}>
+      <div className="admin-grid-3" style={{ marginBottom: 20 }}>
         <div style={cardStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
             <h3 style={{ margin: 0, fontWeight: 700, fontSize: 15, color: TEXT_PRIMARY }}>Recent Applications</h3>
-            <Link to="/admin/leads" style={{ color: BRAND, fontSize: 13, textDecoration: 'none', fontWeight: 500 }}>View all →</Link>
+            <Link to={path('/leads')} style={{ color: BRAND, fontSize: 13, textDecoration: 'none', fontWeight: 500 }}>View all →</Link>
           </div>
           {recentLeads.map((lead) => {
             const sc = getStatusColor(lead.status)

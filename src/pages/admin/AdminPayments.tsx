@@ -171,7 +171,7 @@ export default function AdminPayments() {
         ].map((c) => (
           <div key={c.label} style={{ ...cardStyle, padding: 20 }}>
             <div style={{ fontSize: 13, color: TEXT_SECONDARY }}>{c.label}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4, color: c.color }}>
+            <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: c.color }}>
               {c.value}
             </div>
           </div>
@@ -223,7 +223,7 @@ export default function AdminPayments() {
         ))}
       </div>
 
-      <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
+      <div className="admin-table-wrap" style={{ ...cardStyle, padding: 0 }}>
         {filteredPayments.length === 0 ? (
           <AdminEmptyState
             title="No payments found"
@@ -237,7 +237,7 @@ export default function AdminPayments() {
             }
           />
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
                 {['Txn ID', 'B2C User', 'Amount', 'Method', 'Gateway', 'Status', 'Date', 'Invoice'].map(
@@ -372,7 +372,7 @@ export default function AdminPayments() {
                 </button>
               </div>
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: BRAND, marginBottom: 20 }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: BRAND, marginBottom: 16 }}>
               AED {selectedPayment.amount}
             </div>
             <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>

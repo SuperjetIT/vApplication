@@ -1,8 +1,7 @@
-/**
- * Non-guessable admin sign-in URL (do not link publicly).
- * Share only with authorized operators — not indexed in sitemap or nav.
- */
-export const ADMIN_LOGIN_PATH = '/portal/sv-ops-7k9m2x'
-
-/** Legacy path — returns 404; do not redirect (avoids leaking the real URL). */
-export const ADMIN_LOGIN_PATH_LEGACY = '/admin/login'
+export {
+  ADMIN_LOGIN_PATH,
+  ADMIN_LOGIN_PATH_LEGACY,
+  ADMIN_BASE_PATH,
+  OPERATIONS_LOGIN_PATH,
+  OPERATIONS_BASE_PATH,
+} from './portalRoutes'

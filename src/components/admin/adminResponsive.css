@@ -1,0 +1,241 @@
+/* Admin portal — responsive layout & slightly compact typography */
+
+.admin-root {
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+.admin-main-content {
+  padding: 28px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Header ── */
+.admin-header {
+  height: 60px;
+  padding: 0 28px;
+  gap: 8px;
+}
+
+.admin-header-title h1 {
+  font-size: 18px !important;
+}
+
+.admin-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* ── Grids (add class to page sections) ── */
+.admin-grid-2 {
+  display: grid;
+  grid-template-columns: 1.85fr 1fr;
+  gap: 20px;
+}
+
+.admin-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.admin-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.admin-grid-case {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+.admin-grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+/* ── Toolbars & filters ── */
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-toolbar input,
+.admin-toolbar select {
+  flex: 1 1 180px;
+  min-width: 0 !important;
+}
+
+/* ── Tables ── */
+.admin-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-table-wrap table {
+  min-width: 680px;
+  font-size: 13px !important;
+}
+
+/* ── Hero banner ── */
+.admin-hero {
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 22px;
+}
+
+.admin-hero-deco {
+  display: block;
+}
+
+.admin-stat-value {
+  font-size: 26px !important;
+}
+
+/* ── Settings tabs ── */
+.admin-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+/* ── Modals ── */
+.admin-modal-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+/* ── Tablet (≤1024px) ── */
+@media (max-width: 1024px) {
+  .admin-grid-2,
+  .admin-grid-case {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-main-content {
+    padding: 20px;
+  }
+}
+
+/* ── Mobile (≤768px) ── */
+@media (max-width: 768px) {
+  .admin-hamburger {
+    display: flex !important;
+  }
+
+  .admin-sidebar-wrap {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+
+  .admin-sidebar-wrap.open {
+    transform: translateX(0) !important;
+  }
+
+  .admin-main {
+    margin-left: 0 !important;
+  }
+
+  .admin-header {
+    height: auto;
+    min-height: 56px;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .admin-header-title {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .admin-header-title h1 {
+    font-size: 16px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .admin-header-breadcrumb {
+    font-size: 11px !important;
+  }
+
+  .admin-header-search,
+  .admin-wallet-pills,
+  .admin-header-date {
+    display: none !important;
+  }
+
+  .admin-header-profile-name {
+    display: none;
+  }
+
+  .admin-header-actions {
+    gap: 6px;
+  }
+
+  .admin-main-content {
+    padding: 16px;
+  }
+
+  .admin-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-stat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-hero {
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+
+  .admin-hero h2 {
+    font-size: 20px !important;
+  }
+
+  .admin-hero-deco {
+    display: none !important;
+  }
+
+  .admin-stat-grid .admin-stat-value {
+    font-size: 22px !important;
+  }
+
+  .admin-modal-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Small phones (≤480px) ── */
+@media (max-width: 480px) {
+  .admin-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-header-profile-btn {
+    padding: 6px !important;
+    border-radius: 50% !important;
+  }
+
+  .admin-notif-panel {
+    width: min(340px, calc(100vw - 32px)) !important;
+    right: -8px !important;
+  }
+}

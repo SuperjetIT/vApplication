@@ -16,10 +16,10 @@ export const PURPLE = '#8b5cf6'
 
 export const cardStyle: CSSProperties = {
   background: CARD_BG,
-  borderRadius: 20,
+  borderRadius: 16,
   border: `1px solid ${BORDER}`,
   boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-  padding: 24,
+  padding: 20,
 }
 
 export const hoverCardProps = {
@@ -37,10 +37,10 @@ export const hoverCardProps = {
 export const inputStyle: CSSProperties = {
   background: PAGE_BG,
   border: `1px solid ${BORDER}`,
-  borderRadius: 12,
-  padding: '12px 16px',
+  borderRadius: 10,
+  padding: '10px 14px',
   color: TEXT_PRIMARY,
-  fontSize: 14,
+  fontSize: 13,
   outline: 'none',
   boxSizing: 'border-box',
 }
@@ -52,9 +52,9 @@ export const primaryBtn: CSSProperties = {
   color: '#fff',
   border: 'none',
   borderRadius: 10,
-  padding: '10px 20px',
+  padding: '9px 16px',
   fontWeight: 600,
-  fontSize: 14,
+  fontSize: 13,
   cursor: 'pointer',
   boxShadow: '0 4px 12px rgba(249,62,66,0.25)',
 }
@@ -64,9 +64,9 @@ export const secondaryBtn: CSSProperties = {
   color: TEXT_SECONDARY,
   border: `1px solid ${BORDER}`,
   borderRadius: 10,
-  padding: '10px 20px',
+  padding: '9px 16px',
   fontWeight: 500,
-  fontSize: 14,
+  fontSize: 13,
   cursor: 'pointer',
 }
 
@@ -75,17 +75,17 @@ export const outlineBtn: CSSProperties = {
   border: `1px solid ${BORDER}`,
   color: TEXT_PRIMARY,
   borderRadius: 10,
-  padding: '10px 20px',
+  padding: '9px 16px',
   fontWeight: 500,
-  fontSize: 14,
+  fontSize: 13,
   cursor: 'pointer',
 }
 
 export const tableHeaderStyle: CSSProperties = {
-  padding: '14px 16px',
+  padding: '12px 14px',
   fontWeight: 600,
   color: TEXT_SECONDARY,
-  fontSize: 12,
+  fontSize: 11,
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
   background: PAGE_BG,
@@ -96,16 +96,16 @@ export const tabActive = (active: boolean): CSSProperties => ({
   background: active ? BRAND : '#fff',
   color: active ? '#fff' : TEXT_SECONDARY,
   borderRadius: 8,
-  padding: '4px 12px',
-  fontSize: 13,
+  padding: '4px 10px',
+  fontSize: 12,
   fontWeight: 500,
   cursor: 'pointer',
 })
 
 export const pillTab = (active: boolean): CSSProperties => ({
   borderRadius: 40,
-  padding: '8px 20px',
-  fontSize: 13,
+  padding: '7px 16px',
+  fontSize: 12,
   fontWeight: active ? 600 : 500,
   cursor: 'pointer',
   border: active ? 'none' : `1px solid ${BORDER}`,

@@ -4,6 +4,7 @@ import { AdminLayout } from '../../components/AdminLayout'
 import { AdminAvatar } from '../../components/admin/AdminAvatar'
 import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BRAND_BLUE, BORDER, cardStyle, inputStyle, outlineBtn, PAGE_BG, primaryBtn, SUCCESS, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
+import { usePortalBase } from '../../hooks/usePortalBase'
 import { LEAD_STATUSES, MOCK_LEADS, getStatusColor, type LeadStatus } from '../../data/adminMockData'
 
 const TIMELINE = [
@@ -14,6 +15,7 @@ const TIMELINE = [
 ]
 
 export default function AdminCaseDetail() {
+  const { path, basePath } = usePortalBase()
   const { id } = useParams()
   const [lead, setLead] = useState(() => MOCK_LEADS.find((l) => l.id === id))
   const [note, setNote] = useState('')
@@ -23,10 +25,10 @@ export default function AdminCaseDetail() {
 
   if (!lead) {
     return (
-      <AdminLayout activePath="/admin/cases" title="Application Not Found">
+      <AdminLayout activePath={`${basePath}/cases`} title="Application Not Found">
         <div style={{ ...cardStyle, padding: 32, textAlign: 'center' }}>
           <p style={{ color: TEXT_SECONDARY }}>Application not found.</p>
-          <Link to="/admin/leads" style={{ color: BRAND, textDecoration: 'none' }}>← Back to Applications</Link>
+          <Link to={path('/leads')} style={{ color: BRAND, textDecoration: 'none' }}>← Back to Applications</Link>
         </div>
       </AdminLayout>
     )
@@ -54,20 +56,20 @@ export default function AdminCaseDetail() {
   }
 
   return (
-    <AdminLayout activePath="/admin/cases" title={`Application #${lead.id}`}>
+    <AdminLayout activePath={`${basePath}/cases`} title={`Application #${lead.id}`}>
       <AdminToast message={toast} onClose={() => setToast(null)} />
-      <Link to="/admin/leads" style={{ color: BRAND, textDecoration: 'none', fontSize: 14, marginBottom: 20, display: 'inline-block', fontWeight: 500 }}>← Back to Applications</Link>
+      <Link to={path('/leads')} style={{ color: BRAND, textDecoration: 'none', fontSize: 14, marginBottom: 20, display: 'inline-block', fontWeight: 500 }}>← Back to Applications</Link>
 
       <div style={{ background: 'linear-gradient(135deg, #f8f9fc 0%, #f0f4ff 50%, #fff5f5 100%)', borderRadius: 20, padding: 24, marginBottom: 24, border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         <AdminAvatar name={lead.name} size={64} fontSize={22} />
         <div style={{ flex: 1 }}>
-          <h2 style={{ margin: 0, fontSize: 22, color: TEXT_PRIMARY }}>{lead.name}</h2>
+          <h2 style={{ margin: 0, fontSize: 18, color: TEXT_PRIMARY }}>{lead.name}</h2>
           <p style={{ margin: '4px 0 0', color: TEXT_SECONDARY }}>{lead.email}</p>
         </div>
         <span style={{ padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>{lead.status}</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
+      <div className="admin-grid-case">
         <div style={cardStyle}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 }}>
             {[

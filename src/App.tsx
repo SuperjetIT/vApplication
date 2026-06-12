@@ -15,7 +15,7 @@ import UserMePage from './pages/UserMePage'
 import VisaCheckerPage from './pages/VisaCheckerPage'
 import VisaRequirementsPage from './pages/VisaRequirementsPage'
 import VisaPage from './pages/VisaPage'
-import { AdminGuard } from './components/AdminLayout'
+import { AdminGuard, OperationsGuard } from './components/AdminLayout'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminLeads from './pages/admin/AdminLeads'
@@ -29,7 +29,13 @@ import AdminUsers from './pages/admin/AdminUsers'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminCaseDetail from './pages/admin/AdminCaseDetail'
 import NotFoundPage from './pages/NotFoundPage'
-import { ADMIN_LOGIN_PATH, ADMIN_LOGIN_PATH_LEGACY } from './config/adminRoutes'
+import OperationsLoginPage from './pages/admin/OperationsLoginPage'
+import {
+  ADMIN_LOGIN_PATH,
+  ADMIN_LOGIN_PATH_LEGACY,
+  OPERATIONS_BASE_PATH,
+  OPERATIONS_LOGIN_PATH,
+} from './config/portalRoutes'
 
 const BRAND = '#f93e42'
 
@@ -93,7 +99,11 @@ function CookiesBanner({ onAccept }: { onAccept: () => void }) {
 function AppContent() {
   const { isModalOpen } = useCitizenship()
   const location = useLocation()
-  const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname === ADMIN_LOGIN_PATH
+  const isAdminRoute =
+    location.pathname.startsWith('/admin')
+    || location.pathname.startsWith(OPERATIONS_BASE_PATH)
+    || location.pathname === ADMIN_LOGIN_PATH
+    || location.pathname === OPERATIONS_LOGIN_PATH
   const [cookiesAccepted, setCookiesAccepted] = useState(
     () => localStorage.getItem('cookies_accepted') === 'true',
   )
@@ -120,8 +130,10 @@ function AppContent() {
         <Route path="/user/me" element={<UserMePage />} />
         <Route path="/user/me/applications/:applicationId" element={<UserApplicationPage />} />
         <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
+        <Route path={OPERATIONS_LOGIN_PATH} element={<OperationsLoginPage />} />
         <Route path={ADMIN_LOGIN_PATH_LEGACY} element={<NotFoundPage />} />
         <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
+        <Route path={OPERATIONS_BASE_PATH} element={<OperationsGuard><AdminDashboard /></OperationsGuard>} />
         <Route path="/admin/leads" element={<AdminGuard><AdminLeads /></AdminGuard>} />
         <Route path="/admin/customers" element={<AdminGuard><AdminCustomers /></AdminGuard>} />
         <Route path="/admin/agents" element={<AdminGuard><AdminAgents /></AdminGuard>} />
@@ -132,6 +144,16 @@ function AppContent() {
         <Route path="/admin/users" element={<AdminGuard><AdminUsers /></AdminGuard>} />
         <Route path="/admin/settings" element={<AdminGuard><AdminSettings /></AdminGuard>} />
         <Route path="/admin/cases/:id" element={<AdminGuard><AdminCaseDetail /></AdminGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/leads`} element={<OperationsGuard><AdminLeads /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/customers`} element={<OperationsGuard><AdminCustomers /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/agents`} element={<OperationsGuard><AdminAgents /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/invoices`} element={<OperationsGuard><AdminInvoices /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/payments`} element={<OperationsGuard><AdminPayments /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/expenses`} element={<OperationsGuard><AdminExpenses /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/reports`} element={<OperationsGuard><AdminReports /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/settings`} element={<OperationsGuard><Navigate to={OPERATIONS_BASE_PATH} replace /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/cases/:id`} element={<OperationsGuard><AdminCaseDetail /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/users`} element={<OperationsGuard><Navigate to={OPERATIONS_BASE_PATH} replace /></OperationsGuard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {!isAdminRoute && isModalOpen && <CitizenshipModal />}

@@ -7,6 +7,7 @@ import { mergeProfileImages, setProfileImage } from '../../utils/adminProfileIma
 import { AdminEmptyState } from '../../components/admin/AdminEmptyState'
 import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BRAND_BLUE, BORDER, PAGE_BG, cardStyle, inputStyle, outlineBtn, primaryBtn, selectStyle, SUCCESS, tableHeaderStyle, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
+import { usePortalBase } from '../../hooks/usePortalBase'
 import { MOCK_CUSTOMERS, type AdminCustomer } from '../../data/adminMockData'
 
 function randomB2CPassword(): string {
@@ -27,6 +28,7 @@ const viewBtnStyle = {
 }
 
 export default function AdminCustomers() {
+  const { isOperations } = usePortalBase()
   const [customers, setCustomers] = useState<AdminCustomer[]>(() => mergeProfileImages(MOCK_CUSTOMERS, 'b2c'))
   const [search, setSearch] = useState('')
   const [nationalityFilter, setNationalityFilter] = useState('all')
@@ -81,7 +83,7 @@ export default function AdminCustomers() {
         ))}
       </div>
 
-      <div style={{ ...cardStyle, padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="admin-toolbar" style={{ ...cardStyle, padding: '14px 16px', marginBottom: 16 }}>
         <input placeholder="Search by name, email, or username..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
         <select value={nationalityFilter} onChange={(e) => setNationalityFilter(e.target.value)} style={{ ...selectStyle, minWidth: 160 }}>
           <option value="all">All Nationalities</option>
@@ -90,11 +92,11 @@ export default function AdminCustomers() {
         {hasFilters && <button type="button" onClick={() => { setSearch(''); setNationalityFilter('all') }} style={{ border: 'none', background: 'none', color: BRAND, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Clear filters</button>}
       </div>
 
-      <div style={{ ...cardStyle, overflow: 'hidden', padding: 0 }}>
+      <div className="admin-table-wrap" style={{ ...cardStyle, padding: 0 }}>
         {filtered.length === 0 ? (
           <AdminEmptyState title="No B2C users found" onClearFilters={hasFilters ? () => { setSearch(''); setNationalityFilter('all') } : undefined} />
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8f9fc' }}>
                 {['B2C User', 'Username', 'Email', 'Phone', 'Nationality', 'Applications', 'Total Spent', 'Last Active', 'Action'].map((h) => (
@@ -155,21 +157,25 @@ export default function AdminCustomers() {
                 </div>
               </div>
 
-              <div style={{ background: 'linear-gradient(135deg, #f0f4ff, #f8f9fc)', borderRadius: 16, padding: 20, marginBottom: 20, border: `1px solid ${BORDER}` }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: TEXT_PRIMARY, marginBottom: 4 }}>🔐 B2C Login Credentials</div>
-                <p style={{ margin: '0 0 16px', fontSize: 12, color: TEXT_SECONDARY }}>Super Admin can view and reset portal login for this user</p>
-                <AdminCredentialRow label="User ID / Username" value={profileUser.username} />
-                <AdminCredentialRow label="Password" value={profileUser.password} secret />
-              </div>
+              {!isOperations && (
+                <div style={{ background: 'linear-gradient(135deg, #f0f4ff, #f8f9fc)', borderRadius: 16, padding: 20, marginBottom: 20, border: `1px solid ${BORDER}` }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: TEXT_PRIMARY, marginBottom: 4 }}>🔐 B2C Login Credentials</div>
+                  <p style={{ margin: '0 0 16px', fontSize: 12, color: TEXT_SECONDARY }}>Super Admin can view and reset portal login for this user</p>
+                  <AdminCredentialRow label="User ID / Username" value={profileUser.username} />
+                  <AdminCredentialRow label="Password" value={profileUser.password} secret />
+                </div>
+              )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20, textAlign: 'center' }}>
+              <div className="admin-modal-grid-3" style={{ marginBottom: 20, textAlign: 'center' }}>
                 <div style={{ background: '#f8f9fc', borderRadius: 12, padding: 12 }}><div style={{ fontWeight: 700 }}>{profileUser.applications}</div><div style={{ fontSize: 11, color: TEXT_MUTED }}>Applications</div></div>
                 <div style={{ background: '#f8f9fc', borderRadius: 12, padding: 12 }}><div style={{ fontWeight: 700 }}>AED {profileUser.totalSpent.toLocaleString()}</div><div style={{ fontSize: 11, color: TEXT_MUTED }}>Total Spent</div></div>
                 <div style={{ background: '#f8f9fc', borderRadius: 12, padding: 12 }}><div style={{ fontWeight: 700, fontSize: 12 }}>{profileUser.lastActive}</div><div style={{ fontSize: 11, color: TEXT_MUTED }}>Last Active</div></div>
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" onClick={() => resetPassword(profileUser.id)} style={{ ...outlineBtn, flex: 1, fontSize: 13 }}>Reset Password</button>
+                {!isOperations && (
+                  <button type="button" onClick={() => resetPassword(profileUser.id)} style={{ ...outlineBtn, flex: 1, fontSize: 13 }}>Reset Password</button>
+                )}
                 <button type="button" onClick={() => setProfileUser(null)} style={{ ...primaryBtn, flex: 1, fontSize: 13 }}>Close</button>
               </div>
             </div>

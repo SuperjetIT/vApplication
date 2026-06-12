@@ -259,7 +259,7 @@ export default function AdminInvoices() {
             style={{ ...cardStyle, padding: 20, borderTop: `4px solid ${s.border}` }}
           >
             <div style={{ fontSize: 13, color: TEXT_SECONDARY }}>{s.label}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: s.color, marginTop: 4 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: s.color, marginTop: 4 }}>
               {s.count}
             </div>
             <div style={{ fontSize: 14, color: TEXT_MUTED, marginTop: 4 }}>
@@ -303,7 +303,7 @@ export default function AdminInvoices() {
         </button>
       </div>
 
-      <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
+      <div className="admin-table-wrap" style={{ ...cardStyle, padding: 0 }}>
         {filteredInvoices.length === 0 ? (
           <AdminEmptyState
             title="No invoices found"
@@ -319,7 +319,7 @@ export default function AdminInvoices() {
             }
           />
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
                 {[

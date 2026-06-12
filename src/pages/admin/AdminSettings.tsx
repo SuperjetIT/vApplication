@@ -112,14 +112,14 @@ export default function AdminSettings() {
     <AdminLayout activePath="/admin/settings" title="Settings & API Integrations">
       <AdminToast message={toast} onClose={() => setToast(null)} />
 
-      <div style={{ background: PAGE_BG, borderRadius: 40, padding: 4, display: 'inline-flex', marginBottom: 28, flexWrap: 'wrap', gap: 4, border: `1px solid ${BORDER}` }}>
+      <div className="admin-tab-bar" style={{ background: PAGE_BG, borderRadius: 40, padding: 4, display: 'inline-flex', border: `1px solid ${BORDER}` }}>
         {TABS.map((t) => (
           <button key={t.key} type="button" onClick={() => setActiveSettingsTab(t.key)} style={pillTab(activeSettingsTab === t.key)}>{t.label}</button>
         ))}
       </div>
 
       {activeSettingsTab === 'gateways' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+        <div className="admin-grid-3">
           <GatewayCard name="Stripe" onSave={save} logo={<span style={{ fontWeight: 800, color: '#635bff', fontSize: 14 }}>stripe</span>}>
             <MaskedField label="Publishable Key" defaultValue="pk_test_••••••••••••" />
             <MaskedField label="Secret Key" />
@@ -209,7 +209,7 @@ export default function AdminSettings() {
       )}
 
       {activeSettingsTab === 'visa' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+        <div className="admin-grid-3">
           <div style={{ ...cardStyle, padding: 24 }}>
             <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700 }}>Sherpa API</h3>
             <MaskedField label="API Key" />

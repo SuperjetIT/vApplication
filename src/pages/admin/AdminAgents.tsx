@@ -7,6 +7,7 @@ import { mergeProfileImages, setProfileImage } from '../../utils/adminProfileIma
 import { AdminEmptyState } from '../../components/admin/AdminEmptyState'
 import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BRAND_BLUE, BORDER, cardStyle, hoverCardProps, inputStyle, outlineBtn, primaryBtn, selectStyle, SUCCESS, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
+import { usePortalBase } from '../../hooks/usePortalBase'
 import { MOCK_AGENTS, type AdminAgent } from '../../data/adminMockData'
 
 function randomPassword(len = 12): string {
@@ -20,6 +21,7 @@ function randomUsername(name: string): string {
 }
 
 export default function AdminAgents() {
+  const { isOperations } = usePortalBase()
   const [agents, setAgents] = useState<AdminAgent[]>(() => mergeProfileImages(MOCK_AGENTS, 'b2b'))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -94,7 +96,7 @@ export default function AdminAgents() {
         ))}
       </div>
 
-      <div style={{ ...cardStyle, padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="admin-toolbar" style={{ ...cardStyle, padding: '14px 16px', marginBottom: 16 }}>
         <input placeholder="Search by name, email, or username..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...selectStyle, minWidth: 140 }}>
           <option value="all">All Status</option>
@@ -102,13 +104,15 @@ export default function AdminAgents() {
           <option value="inactive">Inactive</option>
         </select>
         {hasFilters && <button type="button" onClick={() => { setSearch(''); setStatusFilter('all') }} style={{ border: 'none', background: 'none', color: BRAND, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Clear filters</button>}
-        <button type="button" onClick={() => { setCreateOpen(true); setCreatedCreds(null); setForm({ name: '', email: '' }) }} style={{ ...primaryBtn, marginLeft: 'auto' }}>+ Add B2B Partner</button>
+        {!isOperations && (
+          <button type="button" onClick={() => { setCreateOpen(true); setCreatedCreds(null); setForm({ name: '', email: '' }) }} style={{ ...primaryBtn, marginLeft: 'auto' }}>+ Add B2B Partner</button>
+        )}
       </div>
 
       {filtered.length === 0 ? (
         <div style={cardStyle}><AdminEmptyState title="No B2B partners found" onClearFilters={hasFilters ? () => { setSearch(''); setStatusFilter('all') } : undefined} /></div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+        <div className="admin-grid-cards">
           {filtered.map((a) => (
             <div key={a.id} {...hoverCardProps} style={{ ...cardStyle, textAlign: 'center', ...hoverCardProps.style }}>
               <AdminAvatar name={a.name} size={56} fontSize={20} src={a.profileImage} />
@@ -152,21 +156,25 @@ export default function AdminAgents() {
                 </div>
               </div>
 
-              <div style={{ background: 'linear-gradient(135deg, #f0f0ff, #f8f9fc)', borderRadius: 16, padding: 20, marginBottom: 20, border: `1px solid ${BORDER}` }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: TEXT_PRIMARY, marginBottom: 4 }}>🔐 Partner Login Credentials</div>
-                <p style={{ margin: '0 0 16px', fontSize: 12, color: TEXT_SECONDARY }}>Share these with the B2B partner for portal access</p>
-                <AdminCredentialRow label="User ID / Username" value={profileAgent.username} />
-                <AdminCredentialRow label="Password" value={profileAgent.password} secret />
-              </div>
+              {!isOperations && (
+                <div style={{ background: 'linear-gradient(135deg, #f0f0ff, #f8f9fc)', borderRadius: 16, padding: 20, marginBottom: 20, border: `1px solid ${BORDER}` }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: TEXT_PRIMARY, marginBottom: 4 }}>🔐 Partner Login Credentials</div>
+                  <p style={{ margin: '0 0 16px', fontSize: 12, color: TEXT_SECONDARY }}>Share these with the B2B partner for portal access</p>
+                  <AdminCredentialRow label="User ID / Username" value={profileAgent.username} />
+                  <AdminCredentialRow label="Password" value={profileAgent.password} secret />
+                </div>
+              )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20, textAlign: 'center' }}>
+              <div className="admin-modal-grid-3" style={{ marginBottom: 20, textAlign: 'center' }}>
                 <div style={{ background: '#f8f9fc', borderRadius: 12, padding: 12 }}><div style={{ fontWeight: 700 }}>{profileAgent.leads}</div><div style={{ fontSize: 11, color: TEXT_MUTED }}>Applications</div></div>
                 <div style={{ background: '#f8f9fc', borderRadius: 12, padding: 12 }}><div style={{ fontWeight: 700 }}>AED {profileAgent.revenue.toLocaleString()}</div><div style={{ fontSize: 11, color: TEXT_MUTED }}>Revenue</div></div>
                 <div style={{ background: '#f8f9fc', borderRadius: 12, padding: 12 }}><div style={{ fontWeight: 700, color: SUCCESS }}>AED {profileAgent.commission}</div><div style={{ fontSize: 11, color: TEXT_MUTED }}>Commission</div></div>
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" onClick={() => resetPassword(profileAgent.id)} style={{ ...outlineBtn, flex: 1, fontSize: 13 }}>Reset Password</button>
+                {!isOperations && (
+                  <button type="button" onClick={() => resetPassword(profileAgent.id)} style={{ ...outlineBtn, flex: 1, fontSize: 13 }}>Reset Password</button>
+                )}
                 <button type="button" onClick={() => setProfileAgent(null)} style={{ ...primaryBtn, flex: 1, fontSize: 13 }}>Close</button>
               </div>
             </div>
@@ -175,7 +183,7 @@ export default function AdminAgents() {
       )}
 
       {/* Create partner modal */}
-      {createOpen && (
+      {!isOperations && createOpen && (
         <>
           <div role="presentation" onClick={() => setCreateOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 2000 }} />
           <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: '#fff', borderRadius: 24, maxWidth: 480, width: '90%', zIndex: 2001, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.15)' }}>

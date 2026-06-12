@@ -48,7 +48,7 @@ export default function AdminUsers() {
         <button type="button" onClick={() => { setShowCreate(true); setCreated(null); setForm({ name: '', email: '', phone: '' }) }} style={primaryBtn}>+ Create User</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+      <div className="admin-grid-3">
         {users.map((u) => (
           <div
             key={u.id}

@@ -83,7 +83,7 @@ export default function AdminExpenses() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12, flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ fontSize: 13, color: TEXT_SECONDARY, marginBottom: 4 }}>Monthly Budget</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: TEXT_PRIMARY }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: TEXT_PRIMARY }}>
               AED {thisMonth.toLocaleString()} <span style={{ fontSize: 14, fontWeight: 500, color: TEXT_MUTED }}>/ {BUDGET_TOTAL.toLocaleString()}</span>
             </div>
           </div>
@@ -160,11 +160,11 @@ export default function AdminExpenses() {
       </div>
 
       {/* Expense table */}
-      <div style={{ ...cardStyle, overflow: 'hidden', padding: 0, marginBottom: 80 }}>
+      <div className="admin-table-wrap" style={{ ...cardStyle, padding: 0, marginBottom: 80 }}>
         {filteredExpenses.length === 0 ? (
           <AdminEmptyState title="No expenses found" onClearFilters={categoryFilter !== 'all' ? () => setCategoryFilter('all') : undefined} onAdd={() => setModalOpen(true)} addLabel="+ Add Expense" />
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
                 {['Category', 'Description', 'Amount', 'Date', 'Added by', 'Receipt'].map((h) => (

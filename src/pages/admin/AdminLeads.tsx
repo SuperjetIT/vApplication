@@ -20,6 +20,7 @@ import {
   tabActive,
   hoverCardProps,
 } from '../../components/admin/adminTheme'
+import { usePortalBase } from '../../hooks/usePortalBase'
 import {
   LEAD_STATUSES,
   MOCK_LEADS,
@@ -46,6 +47,7 @@ const viewBtnStyle = {
 }
 
 export default function AdminLeads() {
+  const { path, basePath } = usePortalBase()
   const [leads, setLeads] = useState<AdminLead[]>(MOCK_LEADS)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -132,7 +134,7 @@ export default function AdminLeads() {
   }
 
   return (
-    <AdminLayout activePath="/admin/leads" title="Applications">
+    <AdminLayout activePath={`${basePath}/leads`} title="Applications">
       <AdminToast message={toast} onClose={() => setToast(null)} />
 
       {/* Top 4 mini stat pills */}
@@ -151,8 +153,8 @@ export default function AdminLeads() {
               boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
             }}
           >
-            <span style={{ fontSize: 20, fontWeight: 800, color: TEXT_PRIMARY }}>{pill.value}</span>
-            <span style={{ fontSize: 13, color: TEXT_SECONDARY, fontWeight: 500 }}>{pill.label}</span>
+            <span style={{ fontSize: 17, fontWeight: 800, color: TEXT_PRIMARY }}>{pill.value}</span>
+            <span style={{ fontSize: 12, color: TEXT_SECONDARY, fontWeight: 500 }}>{pill.label}</span>
           </div>
         ))}
       </div>
@@ -160,7 +162,7 @@ export default function AdminLeads() {
       {/* Page header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <span style={{ fontWeight: 700, fontSize: 18, color: TEXT_PRIMARY }}>{filteredLeads.length} Applications</span>
+          <span style={{ fontWeight: 700, fontSize: 16, color: TEXT_PRIMARY }}>{filteredLeads.length} Applications</span>
           {hasFilters && (
             <span style={{ marginLeft: 8, fontSize: 13, color: TEXT_MUTED }}>(filtered)</span>
           )}
@@ -170,14 +172,11 @@ export default function AdminLeads() {
 
       {/* Filter bar */}
       <div
+        className="admin-toolbar"
         style={{
           ...cardStyle,
-          padding: 16,
+          padding: 14,
           marginBottom: 16,
-          display: 'flex',
-          gap: 12,
-          flexWrap: 'wrap',
-          alignItems: 'center',
         }}
       >
         <input
@@ -306,8 +305,8 @@ export default function AdminLeads() {
           />
         </div>
       ) : viewMode === 'table' ? (
-        <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+        <div className="admin-table-wrap" style={{ ...cardStyle, padding: 0 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
                 {['#', 'B2C User', 'Passport', 'Destination', 'Source', 'Status', 'Assigned', 'Created', 'Action'].map((h) => (
@@ -410,7 +409,7 @@ export default function AdminLeads() {
                     <td style={{ padding: 16, color: TEXT_MUTED, fontSize: 13 }}>{lead.created}</td>
                     <td style={{ padding: 16 }}>
                       <Link
-                        to={`/admin/cases/${lead.id}`}
+                        to={path(`/cases/${lead.id}`)}
                         style={viewBtnStyle}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = BRAND

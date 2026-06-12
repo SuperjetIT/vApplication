@@ -71,7 +71,7 @@ export default function AdminReports() {
 
       <p style={{ margin: '0 0 24px', fontSize: 14, color: TEXT_SECONDARY }}>Export data to Excel with custom date ranges</p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+      <div className="admin-grid-3">
         {REPORTS.map((r) => {
           const range = getRange(r.id)
           return (
@@ -98,7 +98,7 @@ export default function AdminReports() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 24,
+                    fontSize: 20,
                     flexShrink: 0,
                   }}>
                     {r.icon}
