@@ -5,7 +5,15 @@ import { AdminAvatar } from '../../components/admin/AdminAvatar'
 import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BRAND_BLUE, BORDER, cardStyle, inputStyle, outlineBtn, PAGE_BG, primaryBtn, SUCCESS, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
 import { usePortalBase } from '../../hooks/usePortalBase'
-import { LEAD_STATUSES, MOCK_LEADS, getStatusColor, type LeadStatus } from '../../data/adminMockData'
+import { useDatabaseListener } from '../../hooks/useDatabase'
+import { LEAD_STATUSES, getStatusColor, type LeadStatus } from '../../types/adminTypes'
+import {
+  buildAgentNotifyMessage,
+  buildCustomerNotifyMessage,
+  getLeadById,
+  requestDocumentReupload,
+  updateLeadStatus,
+} from '../../utils/b2cFlow'
 
 const TIMELINE = [
   { step: 'Application created', icon: BRAND_BLUE },
@@ -17,7 +25,8 @@ const TIMELINE = [
 export default function AdminCaseDetail() {
   const { path, basePath } = usePortalBase()
   const { id } = useParams()
-  const [lead, setLead] = useState(() => MOCK_LEADS.find((l) => l.id === id))
+  useDatabaseListener()
+  const lead = id ? getLeadById(id) : undefined
   const [note, setNote] = useState('')
   const [notes, setNotes] = useState<string[]>([])
   const [toast, setToast] = useState<string | null>(null)
@@ -35,11 +44,29 @@ export default function AdminCaseDetail() {
   }
 
   const sc = getStatusColor(lead.status)
+  const isB2B = lead.source === 'B2B'
+  const notifyMessage = isB2B ? buildAgentNotifyMessage : buildCustomerNotifyMessage
+  const notifyLabel = isB2B ? 'partner' : 'customer'
 
   const updateStatus = (status: LeadStatus) => {
-    setLead({ ...lead, status })
+    if (!lead) return
+    updateLeadStatus(lead.id, status)
     setStatusOpen(false)
     setToast(`Status updated to ${status}`)
+  }
+
+  const notifyReupload = () => {
+    if (!lead) return
+    const updated = requestDocumentReupload(lead.id)
+    const msg = notifyMessage(updated ?? lead)
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+    setToast(isB2B ? 'Partner notified to re-upload documents' : 'Customer notified to re-upload documents')
+  }
+
+  const submitToEmbassy = () => {
+    if (!lead) return
+    updateLeadStatus(lead.id, 'Submitted')
+    setToast('Marked as submitted to embassy')
   }
 
   const saveNote = () => {
@@ -50,9 +77,9 @@ export default function AdminCaseDetail() {
   }
 
   const sendReminder = () => {
-    const msg = `Hello ${lead.name}, this is Super Visa regarding your ${lead.destination} visa application. Please check your email for next steps.`
+    const msg = notifyMessage(lead)
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
-    setToast('WhatsApp reminder opened')
+    setToast(`WhatsApp reminder opened for ${notifyLabel}`)
   }
 
   return (
@@ -65,6 +92,9 @@ export default function AdminCaseDetail() {
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 18, color: TEXT_PRIMARY }}>{lead.name}</h2>
           <p style={{ margin: '4px 0 0', color: TEXT_SECONDARY }}>{lead.email}</p>
+          {isB2B && lead.agentName && (
+            <p style={{ margin: '4px 0 0', color: TEXT_MUTED, fontSize: 13 }}>B2B Partner: {lead.agentName}</p>
+          )}
         </div>
         <span style={{ padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>{lead.status}</span>
       </div>
@@ -77,7 +107,11 @@ export default function AdminCaseDetail() {
               ['Destination', lead.destination],
               ['Visa Type', lead.visaType],
               ['Source', lead.source],
+              ...(isB2B ? [['B2B Partner', lead.agentName ?? '—']] : []),
               ['Assigned To', lead.assigned],
+              ['Payment', lead.paymentMethod ?? '—'],
+              ['Invoice', lead.invoiceNo ?? '—'],
+              ['Documents', lead.documentsComplete ? 'Complete' : 'Incomplete'],
               ['Created', lead.created],
             ].map(([label, value]) => (
               <div key={label} style={{ background: PAGE_BG, borderRadius: 12, padding: 16, border: `1px solid ${BORDER}` }}>
@@ -119,8 +153,12 @@ export default function AdminCaseDetail() {
                 </div>
               )}
             </div>
-            <button type="button" onClick={() => setToast('Assign B2B Partner — select from Partners page')} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', marginBottom: 8, fontSize: 13 }}>Assign B2B Partner</button>
-            <button type="button" onClick={sendReminder} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', marginBottom: 8, fontSize: 13 }}>Send Reminder</button>
+            <button type="button" onClick={submitToEmbassy} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', marginBottom: 8, fontSize: 13 }}>Submit to Embassy</button>
+            <button type="button" onClick={notifyReupload} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', marginBottom: 8, fontSize: 13 }}>{isB2B ? 'Notify Partner — Doc Re-upload' : 'Request Doc Re-upload'}</button>
+            {!isB2B && (
+              <button type="button" onClick={() => setToast('Assign B2B Partner — select from Partners page')} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', marginBottom: 8, fontSize: 13 }}>Assign B2B Partner</button>
+            )}
+            <button type="button" onClick={sendReminder} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', marginBottom: 8, fontSize: 13 }}>{isB2B ? 'Notify Partner' : 'Send Reminder'}</button>
             <button type="button" onClick={() => setToast('Document upload — drag & drop coming soon')} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', fontSize: 13 }}>Upload Document</button>
           </div>
           <div style={cardStyle}>

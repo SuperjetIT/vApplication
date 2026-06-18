@@ -1,0 +1,18 @@
+{
+  "users": [
+    {
+      "id": "usr_001",
+      "fullName": "Ahmed Hassan",
+      "email": "ahmed@example.com",
+      "phone": "+971501234567",
+      "phoneCode": "+971",
+      "passportCountry": "India",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Resident",
+      "createdAt": "2026-06-01T10:00:00Z",
+      "lastLogin": "2026-06-15T08:30:00Z",
+      "isVerified": true,
+      "profilePhoto": null
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { getCitizenshipByCode } from '../data/citizenships'
+import { resolveFlagCode } from '../utils/flags'
 import type { ResidencyStatus } from '../utils/visaRequirements'
 
 const CITIZENSHIP_KEY = 'super_visa_citizenship'
@@ -16,7 +17,7 @@ const STATUS_KEY = 'super_visa_residency_status'
 const LEGACY_CITIZENSHIP_KEY = 'user_citizenship'
 
 const DEFAULT_CITIZENSHIP = { citizenship: 'India', countryCode: 'in' }
-const DEFAULT_RESIDENCE = { residenceCountry: 'United Arab Emirates', residenceCode: 'ae' }
+const DEFAULT_RESIDENCE = { residenceCountry: 'UAE', residenceCode: 'ae' }
 const DEFAULT_STATUS: ResidencyStatus = 'Permanent Resident'
 
 type CitizenshipContextValue = {
@@ -68,9 +69,11 @@ function loadResidence(): { residenceCountry: string; residenceCode: string } {
     if (!raw) return DEFAULT_RESIDENCE
     const parsed = JSON.parse(raw) as { residenceCountry?: string; residenceCode?: string }
     if (parsed.residenceCountry && parsed.residenceCode) {
+      const code = resolveFlagCode(parsed.residenceCode, parsed.residenceCountry)
+      const entry = code ? getCitizenshipByCode(code) : undefined
       return {
-        residenceCountry: parsed.residenceCountry,
-        residenceCode: parsed.residenceCode.toLowerCase(),
+        residenceCountry: entry?.name ?? parsed.residenceCountry,
+        residenceCode: code || parsed.residenceCode.toLowerCase(),
       }
     }
   } catch {

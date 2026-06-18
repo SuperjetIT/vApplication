@@ -1,23 +1,19 @@
-import { MOCK_INVOICES, type AdminInvoice, type InvoiceStatus } from '../data/adminMockData'
-
-const STORAGE_KEY = 'admin_invoices'
+import { Database } from '../database/db'
+import type { AdminInvoice, InvoiceStatus } from '../types/adminTypes'
+import { dbInvoiceToAdmin } from './dbMappers'
 
 export function loadInvoices(): AdminInvoice[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw) as AdminInvoice[]
-  } catch {
-    /* ignore */
-  }
-  return MOCK_INVOICES.map((inv) => ({ ...inv }))
+  return Database.getInvoices().map((inv) => dbInvoiceToAdmin(inv as Record<string, unknown>))
 }
 
-export function saveInvoices(invoices: AdminInvoice[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices))
+export function findInvoiceById(id: string): AdminInvoice | undefined {
+  const inv = Database.getInvoiceById(id)
+  return inv ? dbInvoiceToAdmin(inv as Record<string, unknown>) : undefined
 }
 
 export function findInvoiceByNo(invoiceNo: string): AdminInvoice | undefined {
-  return loadInvoices().find((i) => i.invoiceNo === invoiceNo)
+  const inv = Database.getInvoiceByNo(invoiceNo)
+  return inv ? dbInvoiceToAdmin(inv as Record<string, unknown>) : undefined
 }
 
 /** Only bank-transfer invoices can be overdue (past due date + not paid). */
@@ -35,11 +31,10 @@ export function withEffectiveStatus(inv: AdminInvoice): AdminInvoice & { effecti
   return { ...inv, effectiveStatus: getEffectiveInvoiceStatus(inv) }
 }
 
-export function buildInvoiceViewUrl(inv: AdminInvoice): string {
+export function buildInvoiceViewUrl(inv: AdminInvoice, applicationId?: string): string {
   const status = getEffectiveInvoiceStatus(inv)
   const params = new URLSearchParams({
-    no: inv.invoiceNo,
-    invoiceNo: inv.invoiceNo,
+    invoiceId: inv.id,
     status: status === 'PAID' ? 'paid' : status === 'REFUNDED' ? 'refunded' : status === 'OVERDUE' ? 'overdue' : 'unpaid',
     name: inv.customer,
     amount: String(inv.amount),
@@ -52,7 +47,9 @@ export function buildInvoiceViewUrl(inv: AdminInvoice): string {
     travelers: '1',
     paymentMethod: inv.paymentMethod,
     dueDate: inv.dueDate,
+    invoiceNo: inv.invoiceNo,
   })
+  if (applicationId) params.set('applicationId', applicationId)
   return `/invoice?${params.toString()}`
 }
 

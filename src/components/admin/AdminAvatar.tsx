@@ -1,4 +1,4 @@
-import { getAvatarGradient, getInitials } from '../../data/adminMockData'
+import { getAvatarGradient, getInitials } from '../../types/adminTypes'
 
 export function AdminAvatar({
   name,

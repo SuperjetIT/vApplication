@@ -1,0 +1,13 @@
+{
+  "notifications": [
+    {
+      "id": "notif_001",
+      "userId": "usr_001",
+      "userType": "customer",
+      "title": "Application Submitted",
+      "message": "Your UK visa application has been received",
+      "read": false,
+      "createdAt": "2026-06-12T10:00:00Z"
+    }
+  ]
+}

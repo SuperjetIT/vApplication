@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { BRAND, BRAND_BLUE, PAGE_BG, SIDEBAR_BG, BORDER, SUCCESS, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, cardStyle, inputStyle, primaryBtn, outlineBtn } from './admin/adminTheme'
-import { ADMIN_LOGIN_PATH, OPERATIONS_BASE_PATH, OPERATIONS_LOGIN_PATH } from '../config/portalRoutes'
+import { ADMIN_LOGIN_PATH, AGENT_BASE_PATH, OPERATIONS_BASE_PATH, OPERATIONS_LOGIN_PATH } from '../config/portalRoutes'
 import { clearPortalSession, getPortalRole, getPortalUser, isOperationsPath } from '../utils/portalAuth'
 import './admin/adminResponsive.css'
 import {
@@ -348,11 +348,14 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
 export function AdminGuard({ children }: { children: ReactNode }) {
   const role = getPortalRole()
   if (role === 'operations') return <Navigate to={OPERATIONS_BASE_PATH} replace />
+  if (role === 'agent') return <Navigate to={AGENT_BASE_PATH} replace />
   if (role !== 'admin') return <Navigate to={ADMIN_LOGIN_PATH} replace />
   return children
 }
 
 export function OperationsGuard({ children }: { children: ReactNode }) {
-  if (getPortalRole() !== 'operations') return <Navigate to={OPERATIONS_LOGIN_PATH} replace />
+  const role = getPortalRole()
+  if (role === 'agent') return <Navigate to={AGENT_BASE_PATH} replace />
+  if (role !== 'operations') return <Navigate to={OPERATIONS_LOGIN_PATH} replace />
   return children
 }

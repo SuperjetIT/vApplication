@@ -21,14 +21,15 @@ import {
   hoverCardProps,
 } from '../../components/admin/adminTheme'
 import { usePortalBase } from '../../hooks/usePortalBase'
+import { useDatabaseListener } from '../../hooks/useDatabase'
+import { Database } from '../../database/db'
 import {
   LEAD_STATUSES,
-  MOCK_LEADS,
   getStatusColor,
   getUniqueDestinations,
-  type AdminLead,
   type LeadStatus,
-} from '../../data/adminMockData'
+} from '../../types/adminTypes'
+import { loadLeads, updateLeadStatus } from '../../utils/b2cFlow'
 
 const PER_PAGE = 10
 
@@ -48,7 +49,8 @@ const viewBtnStyle = {
 
 export default function AdminLeads() {
   const { path, basePath } = usePortalBase()
-  const [leads, setLeads] = useState<AdminLead[]>(MOCK_LEADS)
+  useDatabaseListener()
+  const leads = loadLeads()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [countryFilter, setCountryFilter] = useState('all')
@@ -106,28 +108,47 @@ export default function AdminLeads() {
   }
 
   const updateStatus = (id: string, status: LeadStatus) => {
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)))
+    updateLeadStatus(id, status)
     setStatusMenuId(null)
     setToast(`Status updated to ${status}`)
   }
 
   const handleCreateApplication = () => {
     if (!newApp.name || !newApp.email || !newApp.destination) return
-    const id = String(leads.length + 1)
-    setLeads((prev) => [...prev, {
-      id,
-      name: newApp.name,
-      email: newApp.email,
-      passport: '—',
-      passportCode: 'ae',
-      destination: newApp.destination,
-      destCode: 'ae',
-      source: newApp.source,
-      status: 'New Application',
-      assigned: 'Unassigned',
-      created: 'Just now',
-      visaType: 'Tourist',
-    }])
+    const normalizedEmail = newApp.email.trim().toLowerCase()
+    const dbUser =
+      Database.getUserByEmail(normalizedEmail)
+      ?? Database.createUser({
+        fullName: newApp.name.trim(),
+        email: normalizedEmail,
+        phone: '',
+        phoneCode: '+971',
+        passportCountry: 'Unknown',
+        residenceCountry: 'UAE',
+        residencyStatus: 'Resident',
+        isVerified: false,
+        profilePhoto: null,
+        lastLogin: null,
+      })
+
+    const appType = newApp.source === 'B2B' ? 'b2b' : 'b2c'
+    Database.createApplication({
+      type: appType,
+      userId: appType === 'b2c' ? String(dbUser.id) : null,
+      partnerId: null,
+      destination: newApp.destination.toLowerCase().replace(/\s+/g, '-'),
+      destinationName: newApp.destination,
+      visaOption: 'Tourist',
+      travelers: [{ firstName: newApp.name.split(' ')[0] ?? newApp.name, lastName: newApp.name.split(' ').slice(1).join(' ') || '—', email: normalizedEmail }],
+      travelDates: { departure: null, return: null },
+      documents: [],
+      status: 'new_application',
+      evisaSupported: false,
+      submissionMethod: 'manual',
+      assignedOperator: null,
+      amount: { governmentFee: 0, processingFee: 0, discount: 0, total: 0 },
+      paymentStatus: 'pending',
+    })
     setCreateOpen(false)
     setNewApp({ name: '', email: '', destination: '', source: 'B2C' })
     setToast('New application created')
@@ -309,7 +330,7 @@ export default function AdminLeads() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
-                {['#', 'B2C User', 'Passport', 'Destination', 'Source', 'Status', 'Assigned', 'Created', 'Action'].map((h) => (
+                {['#', 'Customer', 'Passport', 'Destination', 'Source', 'Partner', 'Status', 'Assigned', 'Created', 'Action'].map((h) => (
                   <th key={h} style={{ ...tableHeaderStyle, background: '#f8f9fc' }}>{h}</th>
                 ))}
               </tr>
@@ -349,6 +370,9 @@ export default function AdminLeads() {
                       >
                         {lead.source}
                       </span>
+                    </td>
+                    <td style={{ padding: 16, color: TEXT_SECONDARY, fontSize: 13 }}>
+                      {lead.source === 'B2B' ? (lead.agentName ?? '—') : '—'}
                     </td>
                     <td style={{ padding: 16, position: 'relative' }}>
                       <button

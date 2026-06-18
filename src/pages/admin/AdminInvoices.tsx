@@ -20,16 +20,15 @@ import {
   TEXT_PRIMARY,
   TEXT_SECONDARY,
 } from '../../components/admin/adminTheme'
-import { getInvoiceStatusStyle, type AdminInvoice, type InvoiceStatus } from '../../data/adminMockData'
+import { getInvoiceStatusStyle, type AdminInvoice, type InvoiceStatus } from '../../types/adminTypes'
 import {
   buildInvoiceViewUrl,
   buildWhatsAppReminderUrl,
   generateInvoiceNo,
   getEffectiveInvoiceStatus,
   getOverdueSummary,
-  loadInvoices,
-  saveInvoices,
 } from '../../utils/adminInvoiceUtils'
+import { Database } from '../../database/db'
 
 const TABS = ['all', 'paid', 'unpaid', 'overdue', 'refunded'] as const
 type Tab = (typeof TABS)[number]
@@ -117,7 +116,21 @@ const EMPTY_CREATE = {
 }
 
 export default function AdminInvoices() {
-  const [invoices, setInvoices] = useState<AdminInvoice[]>(() => loadInvoices())
+  const mapDbInvoiceToAdmin = (inv: Record<string, unknown>): AdminInvoice => ({
+    id: String(inv.id),
+    invoiceNo: String(inv.invoiceNo),
+    customer: String(inv.customerName ?? inv.customer ?? 'Unknown'),
+    destination: String(inv.destination ?? ''),
+    amount: Number(inv.amount ?? inv.total ?? 0),
+    govFee: Number(inv.governmentFee ?? inv.govFee ?? 0),
+    processingFee: Number(inv.processingFee ?? 0),
+    status: String(inv.status ?? 'UNPAID').toUpperCase() as InvoiceStatus,
+    date: String(inv.createdAt ?? inv.date ?? '').slice(0, 10),
+    dueDate: String(inv.dueDate ?? '').slice(0, 10),
+    countryCode: String(inv.countryCode ?? 'ae'),
+    paymentMethod: String(inv.paymentMethod ?? 'Bank Transfer') as 'Card' | 'Bank Transfer',
+  })
+  const [invoices, setInvoices] = useState<AdminInvoice[]>(() => Database.getInvoices().map((inv) => mapDbInvoiceToAdmin(inv as Record<string, unknown>)))
   const [activeTab, setActiveTab] = useState<Tab>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -128,7 +141,6 @@ export default function AdminInvoices() {
 
   const persist = (next: AdminInvoice[]) => {
     setInvoices(next)
-    saveInvoices(next)
   }
 
   const filteredInvoices = useMemo(() => {
@@ -149,6 +161,7 @@ export default function AdminInvoices() {
   const hasFilters = activeTab !== 'all' || searchQuery || dateFrom || dateTo
 
   const markPaid = (id: string) => {
+    Database.markInvoicePaid(id, 'Bank Transfer')
     persist(invoices.map((inv) => (inv.id === id ? { ...inv, status: 'PAID' as InvoiceStatus } : inv)))
     setToast('Invoice marked as paid')
   }
@@ -174,6 +187,21 @@ export default function AdminInvoices() {
       countryCode: createForm.countryCode,
       paymentMethod: 'Bank Transfer',
     }
+    Database.createInvoice({
+      invoiceNo: newInv.invoiceNo,
+      customerName: newInv.customer,
+      destination: newInv.destination,
+      amount: newInv.amount,
+      governmentFee: newInv.govFee,
+      processingFee: newInv.processingFee,
+      total: newInv.amount,
+      status: 'unpaid',
+      createdAt: today,
+      dueDate: due,
+      paymentMethod: 'Bank Transfer',
+      type: 'b2c',
+      countryCode: newInv.countryCode,
+    })
     persist([newInv, ...invoices])
     setCreateOpen(false)
     setCreateForm(EMPTY_CREATE)

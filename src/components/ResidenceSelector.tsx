@@ -6,7 +6,7 @@ import {
   type CitizenshipEntry,
 } from '../data/citizenships'
 import { RESIDENCY_STATUS_OPTIONS, type ResidencyStatus } from '../utils/visaRequirements'
-import { flagUrl } from '../utils/flags'
+import { CountryFlag } from './CountryFlag'
 
 const ACCENT = '#5057ea'
 
@@ -44,13 +44,7 @@ function CountryPill({
         minWidth: 0,
       }}
     >
-      <img
-        src={flagUrl(entry.code, 20)}
-        alt=""
-        width={20}
-        height={14}
-        style={{ borderRadius: 2, objectFit: 'cover', flexShrink: 0 }}
-      />
+      <CountryFlag code={entry.code} countryName={entry.name} size="sm" />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {entry.name}
       </span>
@@ -104,18 +98,22 @@ export function ResidenceSelector({
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 10,
+            gap: 12,
             border: `1.5px solid ${ACCENT}`,
             borderRadius: 40,
-            padding: '8px 16px',
+            padding: '10px 18px',
             background: '#fff',
             cursor: 'pointer',
             fontWeight: 600,
             fontSize: 14,
+            fontFamily: 'inherit',
+            maxWidth: '100%',
           }}
         >
-          <img src={flagUrl(residenceCode, 24)} alt="" width={24} height={16} style={{ borderRadius: 2, objectFit: 'cover' }} />
-          {residenceCountry}
+          <CountryFlag code={residenceCode} countryName={residenceCountry} size="md" />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {residenceCountry}
+          </span>
         </button>
       ) : (
         <>

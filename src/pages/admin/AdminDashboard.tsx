@@ -1,13 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AdminLayout } from '../../components/AdminLayout'
 import { AdminAvatar } from '../../components/admin/AdminAvatar'
 import { BRAND, BORDER, cardStyle, chartTooltipStyle, hoverCardProps, PAGE_BG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
-import { DESTINATION_DEMAND, MOCK_ACTIVITIES, MOCK_LEADS, PIPELINE_STAGES, PENDING_ACTIONS, REVENUE_CHART_DATA, getStatusColor } from '../../data/adminMockData'
+import { LEAD_STATUSES, getStatusColor } from '../../types/adminTypes'
 import { getOverdueSummary, loadInvoices } from '../../utils/adminInvoiceUtils'
 import { usePortalBase } from '../../hooks/usePortalBase'
+import { useDatabaseListener } from '../../hooks/useDatabase'
 import { getPortalUser } from '../../utils/portalAuth'
+import { loadLeads } from '../../utils/b2cFlow'
+import { Database } from '../../database/db'
+
+const REVENUE_CHART_DATA = [
+  { month: 'Jan', revenue: 28000 },
+  { month: 'Feb', revenue: 31000 },
+  { month: 'Mar', revenue: 25000 },
+  { month: 'Apr', revenue: 42000 },
+  { month: 'May', revenue: 38500 },
+  { month: 'Jun', revenue: 15000 },
+]
 
 const STAT_CARDS = [
   { label: 'Revenue Today', value: 'AED 4,200', change: '↑ +12% vs yesterday', up: true, iconBg: 'linear-gradient(135deg,#fff0f0,#ffe4e4)', iconColor: BRAND, spark: 'M0,20 10,15 20,18 30,8 40,12 50,5 60,8' },
@@ -23,22 +35,9 @@ const STAGE_COLORS: Record<string, string> = {
   'Docs Pending': '#f97316', 'Under Review': BRAND, Submitted: '#ec4899', Approved: '#22c55e',
 }
 
-const maxPipeline = Math.max(...PIPELINE_STAGES.map((s) => s.count))
-
-function getTimeGreeting(date = new Date()): string {
-  const hour = date.getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
-}
-
-function getAdminDisplayName(): string {
-  return getPortalUser()?.name?.trim() || 'Super Admin'
-}
-
-function PipelineBar({ stage, count, color, delay }: { stage: string; count: number; color: string; delay: number }) {
+function PipelineBar({ stage, count, color, delay, maxPipeline }: { stage: string; count: number; color: string; delay: number; maxPipeline: number }) {
   const [width, setWidth] = useState(0)
-  const pct = (count / maxPipeline) * 100
+  const pct = maxPipeline > 0 ? (count / maxPipeline) * 100 : 0
   useEffect(() => {
     const t = window.setTimeout(() => setWidth(pct), delay)
     return () => window.clearTimeout(t)
@@ -56,16 +55,68 @@ function PipelineBar({ stage, count, color, delay }: { stage: string; count: num
   )
 }
 
+function getTimeGreeting(date = new Date()): string {
+  const hour = date.getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function getAdminDisplayName(): string {
+  return getPortalUser()?.name?.trim() || 'Super Admin'
+}
+
 export default function AdminDashboard() {
+  useDatabaseListener()
   const navigate = useNavigate()
   const { path } = usePortalBase()
   const [period, setPeriod] = useState<'3M' | '6M' | '1Y'>('6M')
   const [resolvedActions, setResolvedActions] = useState<Set<string>>(new Set())
   const chartData = period === '3M' ? REVENUE_CHART_DATA.slice(-3) : period === '1Y' ? REVENUE_CHART_DATA : REVENUE_CHART_DATA
-  const recentLeads = MOCK_LEADS.slice(0, 5)
+  const leads = loadLeads()
+  const pipelineStages = useMemo(
+    () => LEAD_STATUSES.map((stage) => ({ stage, count: leads.filter((l) => l.status === stage).length })),
+    [leads],
+  )
+  const maxPipeline = Math.max(...pipelineStages.map((s) => s.count), 1)
+  const destinationDemand = useMemo(() => {
+    const counts: Record<string, number> = {}
+    leads.forEach((l) => {
+      counts[l.destination] = (counts[l.destination] ?? 0) + 1
+    })
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([country, applications]) => ({ country, applications, flag: '' }))
+  }, [leads])
+  const pendingActions = useMemo(() => {
+    const actions: { issue: string; customer: string; destination: string }[] = []
+    leads
+      .filter((l) => l.status === 'Docs Pending' || l.status === 'Payment Pending')
+      .slice(0, 5)
+      .forEach((l) => {
+        actions.push({
+          issue: l.status === 'Docs Pending' ? 'Documents required' : 'Payment pending',
+          customer: l.name,
+          destination: l.destination,
+        })
+      })
+    return actions
+  }, [leads])
+  const recentLeads = leads.slice(0, 5)
   const overdue = getOverdueSummary(loadInvoices())
+  const stats = Database.getDashboardStats()
+  const recentActivity = Database.getRecentActivity(10)
   const greeting = getTimeGreeting()
   const adminName = getAdminDisplayName()
+  const dynamicCards = [
+    { ...STAT_CARDS[0], value: `AED ${Math.round(stats.totalRevenue).toLocaleString()}` },
+    { ...STAT_CARDS[1], value: `AED ${Math.round(stats.pendingPayments).toLocaleString()}` },
+    { ...STAT_CARDS[2], value: String(stats.totalApplications) },
+    { ...STAT_CARDS[3], value: String(stats.activeApplications) },
+    { ...STAT_CARDS[4], value: String(stats.approvedApplications) },
+    { ...STAT_CARDS[5], value: String(Database.getPartners().length) },
+  ]
 
   return (
     <AdminLayout activePath="/admin" title="Dashboard">
@@ -84,7 +135,7 @@ export default function AdminDashboard() {
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#fff' }}>{greeting}, {adminName} 👋</h2>
             <p style={{ margin: '6px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Here's what's happening with Superjet Global today</p>
             <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
-              {[`📋 47 Active Applications`, `💰 AED 4,200 Today`, `✅ 3 Approved`, `⚠ AED ${overdue.amount.toLocaleString()} Overdue`].map((p) => (
+              {[`📋 ${stats.activeApplications} Active Applications`, `💰 AED ${Math.round(stats.totalRevenue).toLocaleString()} Revenue`, `✅ ${stats.approvedApplications} Approved`, `⚠ AED ${overdue.amount.toLocaleString()} Overdue`].map((p) => (
                 <span key={p} style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', borderRadius: 40, padding: '8px 16px', color: '#fff', fontSize: 13, fontWeight: 500 }}>{p}</span>
               ))}
             </div>
@@ -110,7 +161,7 @@ export default function AdminDashboard() {
 
       {/* Stat cards */}
       <div className="admin-stat-grid" style={{ marginBottom: 20 }}>
-        {STAT_CARDS.map((c) => (
+        {dynamicCards.map((c) => (
           <div key={c.label} {...hoverCardProps} style={{ ...cardStyle, position: 'relative', overflow: 'hidden', ...hoverCardProps.style }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ width: 48, height: 48, borderRadius: 14, background: c.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -156,8 +207,8 @@ export default function AdminDashboard() {
         <div style={cardStyle}>
           <h3 style={{ margin: '0 0 4px', fontWeight: 700, color: TEXT_PRIMARY }}>Application Pipeline</h3>
           <p style={{ margin: '0 0 16px', fontSize: 13, color: TEXT_SECONDARY }}>Current stage distribution</p>
-          {PIPELINE_STAGES.map((s, i) => (
-            <PipelineBar key={s.stage} stage={s.stage} count={s.count} color={STAGE_COLORS[s.stage] ?? '#5057ea'} delay={i * 80} />
+          {pipelineStages.map((s, i) => (
+            <PipelineBar key={s.stage} stage={s.stage} count={s.count} color={STAGE_COLORS[s.stage] ?? '#5057ea'} delay={i * 80} maxPipeline={maxPipeline} />
           ))}
         </div>
       </div>
@@ -185,26 +236,26 @@ export default function AdminDashboard() {
         </div>
         <div style={{ ...cardStyle, background: '#fff8f8' }}>
           <h3 style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 15, color: TEXT_PRIMARY }}>Needs Action</h3>
-          {PENDING_ACTIONS.filter((a) => !resolvedActions.has(a.issue)).map((a) => (
+          {pendingActions.filter((a) => !resolvedActions.has(a.issue)).map((a) => (
             <div key={a.issue} style={{ background: '#fff', borderRadius: 12, padding: 14, marginBottom: 8, borderLeft: `3px solid ${BRAND}` }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: TEXT_PRIMARY }}>{a.issue}</div>
               <div style={{ fontSize: 12, color: TEXT_SECONDARY, marginTop: 2 }}>{a.customer} — {a.destination}</div>
               <button type="button" onClick={() => setResolvedActions((s) => new Set(s).add(a.issue))} style={{ marginTop: 8, background: 'transparent', border: `1px solid ${BRAND}`, color: BRAND, borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Resolve</button>
             </div>
           ))}
-          {PENDING_ACTIONS.every((a) => resolvedActions.has(a.issue)) && (
+          {pendingActions.length > 0 && pendingActions.every((a) => resolvedActions.has(a.issue)) && (
             <p style={{ fontSize: 13, color: TEXT_MUTED, margin: 0 }}>All caught up! 🎉</p>
           )}
         </div>
         <div style={cardStyle}>
           <h3 style={{ margin: '0 0 16px', fontWeight: 700, fontSize: 15, color: TEXT_PRIMARY }}>Country Demand</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={DESTINATION_DEMAND} layout="vertical" margin={{ left: 10 }}>
+            <BarChart data={destinationDemand} layout="vertical" margin={{ left: 10 }}>
               <XAxis type="number" tick={{ fontSize: 11, fill: TEXT_MUTED }} />
-              <YAxis type="category" dataKey="country" width={80} tick={{ fontSize: 11, fill: TEXT_PRIMARY }} tickFormatter={(v, i) => `${DESTINATION_DEMAND[i]?.flag ?? ''} ${v}`} />
+              <YAxis type="category" dataKey="country" width={80} tick={{ fontSize: 11, fill: TEXT_PRIMARY }} tickFormatter={(v, i) => `${destinationDemand[i]?.flag ?? ''} ${v}`} />
               <Tooltip contentStyle={chartTooltipStyle} />
               <Bar dataKey="applications" radius={[0, 4, 4, 0]}>
-                {DESTINATION_DEMAND.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? BRAND : '#5057ea'} />)}
+                {destinationDemand.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? BRAND : '#5057ea'} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -219,12 +270,12 @@ export default function AdminDashboard() {
           <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>LIVE</span>
         </div>
         <div style={{ borderLeft: `2px solid ${BORDER}`, paddingLeft: 24, marginLeft: 18 }}>
-          {MOCK_ACTIVITIES.slice(0, 7).map((a) => (
-            <div key={a.id} style={{ display: 'flex', gap: 16, marginBottom: 20, position: 'relative' }}>
+          {recentActivity.slice(0, 7).map((a) => (
+            <div key={String(a.id)} style={{ display: 'flex', gap: 16, marginBottom: 20, position: 'relative' }}>
               <div style={{ width: 36, height: 36, borderRadius: '50%', background: PAGE_BG, border: `1px solid ${BORDER}`, position: 'absolute', left: -43, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>●</div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: TEXT_PRIMARY }}>{a.text}</div>
-                <div style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2 }}>{a.time}</div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: TEXT_PRIMARY }}>{String(a.description ?? a.type ?? 'Activity')}</div>
+                <div style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2 }}>{String(a.timestamp ?? '')}</div>
               </div>
             </div>
           ))}

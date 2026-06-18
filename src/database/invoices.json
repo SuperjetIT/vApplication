@@ -1,0 +1,22 @@
+{
+  "invoices": [
+    {
+      "id": "inv_001",
+      "invoiceNo": "ATL45448320",
+      "applicationId": "app_001",
+      "type": "b2c",
+      "customerName": "Ahmed Hassan",
+      "destination": "United Kingdom",
+      "amount": 749,
+      "governmentFee": 650,
+      "processingFee": 99,
+      "vat": 37.45,
+      "total": 786.45,
+      "status": "unpaid",
+      "paymentMethod": null,
+      "createdAt": "2026-06-12T10:00:00Z",
+      "dueDate": "2026-06-19T10:00:00Z",
+      "paidAt": null
+    }
+  ]
+}

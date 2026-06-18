@@ -30,9 +30,22 @@ import AdminSettings from './pages/admin/AdminSettings'
 import AdminCaseDetail from './pages/admin/AdminCaseDetail'
 import NotFoundPage from './pages/NotFoundPage'
 import OperationsLoginPage from './pages/admin/OperationsLoginPage'
+import { AgentGuard } from './components/AgentLayout'
+import AgentLoginPage from './pages/agent/AgentLoginPage'
+import AgentDashboard from './pages/agent/AgentDashboard'
+import AgentVisaPage from './pages/agent/AgentVisaPage'
+import AgentApplyPage from './pages/agent/AgentApplyPage'
+import AgentApplicationsPage from './pages/agent/AgentApplicationsPage'
+import AgentApplicationDetailPage from './pages/agent/AgentApplicationDetailPage'
+import AgentCommissionsPage from './pages/agent/AgentCommissionsPage'
+import AgentProfilePage from './pages/agent/AgentProfilePage'
+import AgentRegisterPage from './pages/agent/AgentRegisterPage'
+import { DevToolsPanel } from './components/DevToolsPanel'
 import {
   ADMIN_LOGIN_PATH,
   ADMIN_LOGIN_PATH_LEGACY,
+  AGENT_BASE_PATH,
+  AGENT_LOGIN_PATH,
   OPERATIONS_BASE_PATH,
   OPERATIONS_LOGIN_PATH,
 } from './config/portalRoutes'
@@ -102,8 +115,10 @@ function AppContent() {
   const isAdminRoute =
     location.pathname.startsWith('/admin')
     || location.pathname.startsWith(OPERATIONS_BASE_PATH)
+    || location.pathname.startsWith(AGENT_BASE_PATH)
     || location.pathname === ADMIN_LOGIN_PATH
     || location.pathname === OPERATIONS_LOGIN_PATH
+    || location.pathname === AGENT_LOGIN_PATH
   const [cookiesAccepted, setCookiesAccepted] = useState(
     () => localStorage.getItem('cookies_accepted') === 'true',
   )
@@ -131,6 +146,7 @@ function AppContent() {
         <Route path="/user/me/applications/:applicationId" element={<UserApplicationPage />} />
         <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
         <Route path={OPERATIONS_LOGIN_PATH} element={<OperationsLoginPage />} />
+        <Route path={AGENT_LOGIN_PATH} element={<AgentLoginPage />} />
         <Route path={ADMIN_LOGIN_PATH_LEGACY} element={<NotFoundPage />} />
         <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
         <Route path={OPERATIONS_BASE_PATH} element={<OperationsGuard><AdminDashboard /></OperationsGuard>} />
@@ -154,10 +170,19 @@ function AppContent() {
         <Route path={`${OPERATIONS_BASE_PATH}/settings`} element={<OperationsGuard><Navigate to={OPERATIONS_BASE_PATH} replace /></OperationsGuard>} />
         <Route path={`${OPERATIONS_BASE_PATH}/cases/:id`} element={<OperationsGuard><AdminCaseDetail /></OperationsGuard>} />
         <Route path={`${OPERATIONS_BASE_PATH}/users`} element={<OperationsGuard><Navigate to={OPERATIONS_BASE_PATH} replace /></OperationsGuard>} />
+        <Route path={AGENT_BASE_PATH} element={<AgentGuard><AgentDashboard /></AgentGuard>} />
+        <Route path={`${AGENT_BASE_PATH}/visa/:countrySlug`} element={<AgentGuard><AgentVisaPage /></AgentGuard>} />
+        <Route path={`${AGENT_BASE_PATH}/apply`} element={<AgentGuard><AgentApplyPage /></AgentGuard>} />
+        <Route path={`${AGENT_BASE_PATH}/applications`} element={<AgentGuard><AgentApplicationsPage /></AgentGuard>} />
+        <Route path={`${AGENT_BASE_PATH}/applications/:id`} element={<AgentGuard><AgentApplicationDetailPage /></AgentGuard>} />
+        <Route path={`${AGENT_BASE_PATH}/commissions`} element={<AgentGuard><AgentCommissionsPage /></AgentGuard>} />
+        <Route path={`${AGENT_BASE_PATH}/profile`} element={<AgentGuard><AgentProfilePage /></AgentGuard>} />
+        <Route path="/agent/register" element={<AgentRegisterPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {!isAdminRoute && isModalOpen && <CitizenshipModal />}
       {!isAdminRoute && !cookiesAccepted && <CookiesBanner onAccept={handleAcceptCookies} />}
+      <DevToolsPanel />
     </>
   )
 }

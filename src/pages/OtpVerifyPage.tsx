@@ -83,7 +83,7 @@ export default function OtpVerifyPage() {
         }
         await loginWithEmail(email, result.user)
         setMessage({ type: 'success', text: 'Signed in successfully. Redirecting…' })
-        window.setTimeout(() => navigate('/', { replace: true }), 600)
+        window.setTimeout(() => navigate('/user/me', { replace: true }), 600)
       } catch (err) {
         setMessage({
           type: 'error',

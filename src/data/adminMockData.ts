@@ -26,6 +26,18 @@ export interface AdminLead {
   assigned: string
   created: string
   visaType: string
+  /** Links B2C website submission to customer dashboard */
+  applicationId?: string
+  invoiceNo?: string
+  paymentMethod?: 'Card' | 'Bank Transfer'
+  amount?: number
+  documentsComplete?: boolean
+  /** B2B partner who submitted this application */
+  agentId?: string
+  agentName?: string
+  agentApplicationId?: string
+  commissionAed?: number
+  commissionPaid?: boolean
 }
 
 export interface AdminCustomer {
@@ -53,6 +65,8 @@ export interface AdminAgent {
   commission: number
   status: 'Active' | 'Inactive'
   profileImage?: string
+  /** Partner wallet for commission-model payments */
+  walletBalance?: number
 }
 
 export interface AdminInvoice {
@@ -111,6 +125,7 @@ export interface AdminUser {
   name: string
   email: string
   username: string
+  password?: string
   role: string
   status: 'Active' | 'Inactive'
   created: string
@@ -285,10 +300,10 @@ export const MOCK_ACTIVITIES: AdminActivity[] = [
 ]
 
 export const MOCK_USERS: AdminUser[] = [
-  { id: '1', name: 'Super Admin', email: 'admin@superjetglobal.com', username: 'superadmin', role: 'Operations', status: 'Active', created: '2025-01-15', lastLogin: '2026-06-03' },
-  { id: '2', name: 'Sara Malik', email: 'sara@superjetglobal.com', username: 'sara042', role: 'Operations', status: 'Active', created: '2025-03-20', lastLogin: '2026-06-02' },
-  { id: '3', name: 'John Davidson', email: 'john@superjetglobal.com', username: 'john187', role: 'Operations', status: 'Active', created: '2025-04-10', lastLogin: '2026-06-01' },
-  { id: '4', name: 'Ahmed Khan', email: 'ahmed@superjetglobal.com', username: 'ahmed329', role: 'Operations', status: 'Inactive', created: '2025-06-05', lastLogin: '2026-05-15' },
+  { id: '1', name: 'Super Admin', email: 'admin@superjetglobal.com', username: 'superadmin', password: 'demoadminsjt', role: 'Admin', status: 'Active', created: '2025-01-15', lastLogin: '2026-06-03' },
+  { id: '2', name: 'Sara Malik', email: 'sara@superjetglobal.com', username: 'sara042', password: 'sara042', role: 'Operations', status: 'Active', created: '2025-03-20', lastLogin: '2026-06-02' },
+  { id: '3', name: 'John Davidson', email: 'john@superjetglobal.com', username: 'john187', password: 'john187', role: 'Operations', status: 'Active', created: '2025-04-10', lastLogin: '2026-06-01' },
+  { id: '4', name: 'Ahmed Khan', email: 'ahmed@superjetglobal.com', username: 'ahmed329', password: 'ahmed329', role: 'Operations', status: 'Inactive', created: '2025-06-05', lastLogin: '2026-05-15' },
 ]
 
 export const MOCK_CASES: AdminCase[] = MOCK_LEADS.slice(0, 10).map((l) => ({

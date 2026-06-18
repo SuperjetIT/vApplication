@@ -20,7 +20,10 @@ import {
   TEXT_PRIMARY,
   TEXT_SECONDARY,
 } from '../../components/admin/adminTheme'
-import { MOCK_PAYMENTS, type AdminPayment, type PaymentStatus } from '../../data/adminMockData'
+import { useDatabaseListener } from '../../hooks/useDatabase'
+import { Database } from '../../database/db'
+import type { AdminPayment, PaymentStatus } from '../../types/adminTypes'
+import { dbPaymentToAdmin } from '../../utils/dbMappers'
 
 const STATUS_OPTS = ['all', 'Success', 'Pending', 'Failed', 'Refunded'] as const
 const METHOD_OPTS = ['all', 'Card', 'Bank Transfer', 'Wallet'] as const
@@ -119,6 +122,8 @@ const rowHover = {
 }
 
 export default function AdminPayments() {
+  useDatabaseListener()
+  const payments = Database.getPayments().map((p) => dbPaymentToAdmin(p as Record<string, unknown>))
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTS)[number]>('all')
   const [methodFilter, setMethodFilter] = useState<(typeof METHOD_OPTS)[number]>('all')
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -126,12 +131,12 @@ export default function AdminPayments() {
   const [toast, setToast] = useState<string | null>(null)
 
   const filteredPayments = useMemo(() => {
-    return MOCK_PAYMENTS.filter((p) => {
+    return payments.filter((p) => {
       const matchStatus = statusFilter === 'all' || p.status === statusFilter
       const matchMethod = methodFilter === 'all' || p.method === methodFilter
       return matchStatus && matchMethod
     })
-  }, [statusFilter, methodFilter])
+  }, [payments, statusFilter, methodFilter])
 
   const openDrawer = (p: AdminPayment) => {
     setSelectedPayment(p)

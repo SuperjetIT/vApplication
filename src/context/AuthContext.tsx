@@ -8,9 +8,38 @@ import {
   type ReactNode,
 } from 'react'
 import { getAvatarColor, getDisplayName, getInitials } from '../utils/avatar'
+import { Database } from '../database/db'
 
 const USER_KEY = 'supervisa_user'
 const OTP_EMAIL_KEY = 'supervisa_otp_email'
+const CURRENT_USER_ID_KEY = 'current_user_id'
+
+function syncUserToDatabase(email: string, fullName: string) {
+  const normalized = email.trim().toLowerCase()
+  const existing = Database.getUserByEmail(normalized)
+  if (!existing) {
+    const created = Database.createUser({
+      fullName,
+      email: normalized,
+      phone: '',
+      phoneCode: '+971',
+      passportCountry: '',
+      residenceCountry: 'UAE',
+      residencyStatus: 'Resident',
+      isVerified: true,
+      profilePhoto: null,
+      lastLogin: new Date().toISOString(),
+    })
+    localStorage.setItem(CURRENT_USER_ID_KEY, String(created.id))
+    return
+  }
+  Database.updateUser(String(existing.id), {
+    fullName,
+    lastLogin: new Date().toISOString(),
+    isVerified: true,
+  })
+  localStorage.setItem(CURRENT_USER_ID_KEY, String(existing.id))
+}
 
 export type AuthUser = {
   email: string
@@ -137,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       applyUser(nextUser)
+      syncUserToDatabase(normalized, nextUser.fullName ?? '')
+      localStorage.setItem('user_logged_in', 'true')
       sessionStorage.removeItem(OTP_EMAIL_KEY)
     },
     [applyUser],
@@ -157,21 +188,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (fullName: string) => {
       if (!user?.email) return
       const trimmed = fullName.trim()
-      const res = await fetch('/api/user/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, fullName: trimmed }),
-      })
+      const normalized = user.email.trim().toLowerCase()
 
-      if (!res.ok) {
-        throw new Error(await parseApiError(res))
-      }
-
-      const data = (await res.json()) as { email: string; fullName?: string }
       applyUser({
-        email: data.email.trim().toLowerCase(),
-        fullName: (data.fullName ?? trimmed).trim() || undefined,
+        email: normalized,
+        fullName: trimmed || undefined,
       })
+      syncUserToDatabase(normalized, trimmed)
+
+      try {
+        const res = await fetch('/api/user/me', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normalized, fullName: trimmed }),
+        })
+        if (!res.ok) {
+          throw new Error(await parseApiError(res))
+        }
+        const data = (await res.json()) as { email: string; fullName?: string }
+        const apiName = (data.fullName ?? trimmed).trim()
+        applyUser({
+          email: data.email.trim().toLowerCase(),
+          fullName: apiName || undefined,
+        })
+        syncUserToDatabase(data.email.trim().toLowerCase(), apiName)
+      } catch {
+        /* Database + local session already updated — API sync is best-effort */
+      }
     },
     [user?.email, applyUser],
   )

@@ -1,0 +1,15 @@
+{
+  "expenses": [
+    {
+      "id": "exp_001",
+      "category": "Office Rent",
+      "description": "June rent - Business Bay office",
+      "amount": 8500,
+      "currency": "AED",
+      "date": "2026-06-01",
+      "receiptUrl": null,
+      "addedBy": "admin",
+      "createdAt": "2026-06-01T10:00:00Z"
+    }
+  ]
+}

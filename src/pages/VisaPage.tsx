@@ -73,54 +73,6 @@ const REVIEWS = [
   },
 ]
 
-type ServicePackage = {
-  id: string
-  name: string
-  price: number
-  popular: boolean
-  features: string[]
-  outline?: boolean
-  dark?: boolean
-}
-
-const SERVICE_PACKAGES: ServicePackage[] = [
-  {
-    id: 'basic',
-    name: 'Basic Guidance',
-    price: 99,
-    popular: false,
-    features: ['Visa checklist', 'Document review (1 round)', 'Email support'],
-    outline: true,
-  },
-  {
-    id: 'standard',
-    name: 'Standard Support',
-    price: 199,
-    popular: true,
-    features: [
-      'Everything in Basic',
-      'Full application preparation',
-      'WhatsApp support',
-      '2 document review rounds',
-    ],
-    outline: false,
-  },
-  {
-    id: 'premium',
-    name: 'Premium Concierge',
-    price: 349,
-    popular: false,
-    features: [
-      'Everything in Standard',
-      'Priority processing',
-      'Appointment booking',
-      'Rejection insurance',
-      'Dedicated case officer',
-    ],
-    dark: true,
-  },
-]
-
 function countryImageUrl(slug: string) {
   return `https://picsum.photos/seed/${slug}/1400/600`
 }
@@ -838,6 +790,15 @@ export default function VisaPage() {
       <section style={sectionGap}>
         <SectionHeading title="Guaranteed Visa Delivery" />
         <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSelectedDelivery(1)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setSelectedDelivery(1)
+            }
+          }}
           style={{
             border: selectedDelivery === 1 ? `2px solid ${ACCENT}` : '1px solid #eee',
             background: selectedDelivery === 1 ? '#fafbff' : '#fff',
@@ -849,14 +810,15 @@ export default function VisaPage() {
             justifyContent: 'space-between',
             alignItems: isMobile ? 'stretch' : 'center',
             gap: 12,
+            cursor: 'pointer',
           }}
         >
           <div>
             <span
               style={{
                 display: 'inline-block',
-                background: '#eef4ff',
-                color: ACCENT,
+                background: selectedDelivery === 1 ? '#eef4ff' : '#f5f5f5',
+                color: selectedDelivery === 1 ? ACCENT : '#888',
                 borderRadius: 40,
                 padding: '4px 12px',
                 fontSize: 12,
@@ -869,21 +831,52 @@ export default function VisaPage() {
             <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 18 }}>{standardDate}</p>
             <span style={{ color: '#888', fontSize: 13 }}>View Timeline ↓</span>
           </div>
-          <span
-            style={{
-              alignSelf: isMobile ? 'flex-start' : 'center',
-              background: '#22c55e',
-              color: '#fff',
-              borderRadius: 40,
-              padding: '6px 16px',
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            ✓ Selected
-          </span>
+          {selectedDelivery === 1 ? (
+            <span
+              style={{
+                alignSelf: isMobile ? 'flex-start' : 'center',
+                background: '#22c55e',
+                color: '#fff',
+                borderRadius: 40,
+                padding: '6px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              ✓ Selected
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedDelivery(1)
+              }}
+              style={{
+                alignSelf: isMobile ? 'flex-start' : 'center',
+                border: '1px solid #ddd',
+                borderRadius: 40,
+                padding: '6px 16px',
+                fontSize: 13,
+                background: '#fff',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Select
+            </button>
+          )}
         </div>
         <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSelectedDelivery(2)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setSelectedDelivery(2)
+            }
+          }}
           style={{
             border: selectedDelivery === 2 ? `2px solid ${ACCENT}` : '1px solid #eee',
             background: selectedDelivery === 2 ? '#fafbff' : '#fff',
@@ -894,14 +887,15 @@ export default function VisaPage() {
             justifyContent: 'space-between',
             alignItems: isMobile ? 'stretch' : 'center',
             gap: 12,
+            cursor: 'pointer',
           }}
         >
           <div>
             <span
               style={{
                 display: 'inline-block',
-                background: '#f5f5f5',
-                color: '#888',
+                background: selectedDelivery === 2 ? '#eef4ff' : '#f5f5f5',
+                color: selectedDelivery === 2 ? ACCENT : '#888',
                 borderRadius: 40,
                 padding: '4px 12px',
                 fontSize: 12,
@@ -931,7 +925,10 @@ export default function VisaPage() {
           ) : (
             <button
               type="button"
-              onClick={() => setSelectedDelivery(2)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedDelivery(2)
+              }}
               style={{
                 alignSelf: isMobile ? 'flex-start' : 'center',
                 border: '1px solid #ddd',
@@ -1049,83 +1046,6 @@ export default function VisaPage() {
             <path d="M8 11V7a4 4 0 118 0v4" stroke="#16a34a" strokeWidth="1.5" />
           </svg>
           All documents are verified by our experts before submission
-        </div>
-      </section>
-
-      <section style={sectionGap}>
-        <SectionHeading title="Service Packages" />
-        <p style={{ margin: '0 0 24px', color: '#888', fontSize: 15 }}>
-          Choose the support level that works for you
-        </p>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-            gap: 16,
-          }}
-        >
-          {SERVICE_PACKAGES.map((pkg) => (
-            <div
-              key={pkg.id}
-              style={{
-                position: 'relative',
-                borderRadius: 20,
-                padding: 28,
-                border: pkg.popular ? `2px solid ${BRAND}` : '2px solid #eee',
-                background: '#fff',
-                overflow: 'hidden',
-              }}
-            >
-              {pkg.popular && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    right: 0,
-                    background: BRAND,
-                    color: '#fff',
-                    borderRadius: '0 20px 0 12px',
-                    padding: '6px 14px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                  }}
-                >
-                  Most Popular
-                </span>
-              )}
-              <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 16 }}>{pkg.name}</p>
-              <p style={{ margin: '0 0 16px', fontSize: 24, fontWeight: 800, color: BRAND }}>
-                AED {pkg.price}
-              </p>
-              <ul style={{ margin: '0 0 20px', paddingLeft: 18, fontSize: 14, color: '#666', lineHeight: 1.8 }}>
-                {pkg.features.map((f) => (
-                  <li key={f}>{f}</li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={() =>
-                  navigate(
-                    `/apply?destination=${country.slug}&option=${selectedOptionId}&step=personal&package=${pkg.id}`,
-                  )
-                }
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: 12,
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  border: pkg.dark ? 'none' : pkg.outline ? `2px solid ${BRAND}` : 'none',
-                  background: pkg.dark ? '#1a1a1a' : pkg.outline ? '#fff' : BRAND,
-                  color: pkg.dark ? '#fff' : pkg.outline ? BRAND : '#fff',
-                }}
-              >
-                Get Started
-              </button>
-            </div>
-          ))}
         </div>
       </section>
 

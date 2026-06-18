@@ -4,7 +4,10 @@ import { AdminLayout } from '../../components/AdminLayout'
 import { AdminEmptyState } from '../../components/admin/AdminEmptyState'
 import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BORDER, chartTooltipStyle, inputStyle, selectStyle, cardStyle, outlineBtn, primaryBtn, tableHeaderStyle, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, PAGE_BG } from '../../components/admin/adminTheme'
-import { MOCK_EXPENSES, type AdminExpense } from '../../data/adminMockData'
+import { useDatabaseListener } from '../../hooks/useDatabase'
+import { Database } from '../../database/db'
+import type { AdminExpense } from '../../types/adminTypes'
+import { dbExpenseToAdmin } from '../../utils/dbMappers'
 
 const CATEGORIES = ['Salary', 'Office Rent', 'Software', 'Marketing', 'Travel', 'Other', 'Custom']
 const COLORS = ['#f93e42', '#5057ea', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4']
@@ -22,7 +25,8 @@ const pillFilter = (active: boolean): React.CSSProperties => ({
 })
 
 export default function AdminExpenses() {
-  const [expenses, setExpenses] = useState<AdminExpense[]>(MOCK_EXPENSES)
+  useDatabaseListener()
+  const expenses = Database.getExpenses().map((e) => dbExpenseToAdmin(e as Record<string, unknown>))
   const [modalOpen, setModalOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [toast, setToast] = useState<string | null>(null)
@@ -59,16 +63,15 @@ export default function AdminExpenses() {
   const handleSubmit = () => {
     if (!form.description || !form.amount || !form.date) return
     const category = form.category === 'Custom' ? (form.customCategory.trim() || 'Custom') : form.category
-    setExpenses((prev) => [...prev, {
-      id: String(prev.length + 1),
+    Database.createExpense({
       category,
       description: form.description,
       amount: Number(form.amount),
       date: form.date,
       addedBy: 'Super Admin',
-      hasReceipt: Boolean(form.receiptName),
-      receiptName: form.receiptName || undefined,
-    }])
+      receiptName: form.receiptName || null,
+      receiptUrl: form.receiptName ? `local://${form.receiptName}` : null,
+    })
     setModalOpen(false)
     setForm({ category: 'Salary', customCategory: '', description: '', amount: '', date: '', receiptName: '' })
     setToast('Expense added successfully')

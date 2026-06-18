@@ -1,0 +1,54 @@
+{
+  "applications": [
+    {
+      "id": "app_001",
+      "type": "b2c",
+      "userId": "usr_001",
+      "partnerId": null,
+      "destination": "uk",
+      "destinationName": "United Kingdom",
+      "visaOption": "single",
+      "travelers": [
+        {
+          "firstName": "AHMED",
+          "lastName": "HASSAN",
+          "dateOfBirth": "15/03/1990",
+          "passportNumber": "A1234567",
+          "passportExpiry": "20/05/2030",
+          "nationality": "India",
+          "gender": "Male"
+        }
+      ],
+      "travelDates": {
+        "departure": "2026-08-10",
+        "return": "2026-08-25"
+      },
+      "documents": [
+        {
+          "id": "doc_001",
+          "type": "passport",
+          "fileName": "passport_ahmed.pdf",
+          "status": "pending_review",
+          "uploadedAt": "2026-06-12T10:05:00Z"
+        }
+      ],
+      "status": "pending_docs",
+      "evisaSupported": false,
+      "submissionMethod": "manual",
+      "assignedOperator": null,
+      "amount": {
+        "governmentFee": 650,
+        "processingFee": 99,
+        "discount": 0,
+        "total": 749
+      },
+      "paymentStatus": "paid",
+      "createdAt": "2026-06-12T10:00:00Z",
+      "updatedAt": "2026-06-12T10:05:00Z",
+      "timeline": [
+        { "status": "submitted", "timestamp": "2026-06-12T10:00:00Z", "note": "Application submitted" },
+        { "status": "docs_uploaded", "timestamp": "2026-06-12T10:05:00Z", "note": "Documents uploaded" }
+      ]
+    }
+  ]
+}

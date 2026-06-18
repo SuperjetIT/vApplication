@@ -1,0 +1,17 @@
+{
+  "documents": [
+    {
+      "id": "doc_001",
+      "applicationId": "app_001",
+      "type": "passport",
+      "fileName": "passport_ahmed.pdf",
+      "fileSize": 2400000,
+      "fileType": "application/pdf",
+      "status": "pending_review",
+      "reviewNote": null,
+      "uploadedAt": "2026-06-12T10:05:00Z",
+      "reviewedBy": null,
+      "reviewedAt": null
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js'
-import { loadStripe } from '@stripe/stripe-js'
+import { getStripePromise, stripeMockCheckout, stripeConfigured, stripeTestMode } from '../config/stripe'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -9,7 +9,10 @@ import { getCountry, type Country, type VisaOption } from '../data/countries'
 import { ResidenceSelector } from '../components/ResidenceSelector'
 import { SiteFooter } from '../components/SiteFooter'
 import { flagUrl } from '../utils/flags'
-import { scanPassport, type PassportData } from '../utils/passportOCR'
+import { CountryFlag } from '../components/CountryFlag'
+import { scanPassportDocument, getPreferredOcrEngine, isOcrAutoFillEnabled } from '../utils/scanPassportDocument'
+import type { PassportData } from '../utils/passportOCR'
+import { Database } from '../database/db'
 import {
   getVisaRequirements,
   type DocumentRequirement,
@@ -22,11 +25,6 @@ const GREEN = '#22c55e'
 const ORANGE = '#f59e0b'
 const BG_GRADIENT =
   'linear-gradient(135deg, #f5e6ff 0%, #ffeaea 30%, #fff0e6 60%, #e6f0ff 100%)'
-
-const STRIPE_PUBLISHABLE_KEY =
-  'pk_test_51OxampleTestKeyReplaceWithYourActualStripeTestPublishableKey'
-
-const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY)
 
 type ApplyStep = 'personal' | 'travel' | 'docs' | 'appt' | 'checkout'
 
@@ -48,7 +46,41 @@ const TRAVEL_PURPOSES = ['Tourist', 'Business', 'Family Visit', 'Student', 'Medi
 const OCCUPATIONS = [
   'Employed', 'Self Employed', 'Business Owner', 'Student', 'Homemaker', 'Retired', 'Other',
 ] as const
-const CURRENCIES = ['AED', 'USD', 'EUR', 'GBP'] as const
+
+type SalaryCurrencyOption = { code: string; label: string }
+
+const BASE_SALARY_CURRENCIES: SalaryCurrencyOption[] = [
+  { code: 'AED', label: 'AED' },
+  { code: 'USD', label: 'USD' },
+  { code: 'EUR', label: 'EUR' },
+  { code: 'GBP', label: 'GBP' },
+]
+
+/** Local currency shown when traveller nationality is set (e.g. India → INR). */
+const NATIONALITY_SALARY_CURRENCY: Record<string, SalaryCurrencyOption> = {
+  India: { code: 'INR', label: 'INR (₹)' },
+  Pakistan: { code: 'PKR', label: 'PKR (Rs)' },
+  Bangladesh: { code: 'BDT', label: 'BDT (৳)' },
+  Philippines: { code: 'PHP', label: 'PHP (₱)' },
+  Nepal: { code: 'NPR', label: 'NPR (Rs)' },
+  'Sri Lanka': { code: 'LKR', label: 'LKR (Rs)' },
+  Egypt: { code: 'EGP', label: 'EGP' },
+  Kenya: { code: 'KES', label: 'KES' },
+  Nigeria: { code: 'NGN', label: 'NGN (₦)' },
+  Ghana: { code: 'GHS', label: 'GHS' },
+  Ethiopia: { code: 'ETB', label: 'ETB' },
+  Jordan: { code: 'JOD', label: 'JOD' },
+  Lebanon: { code: 'LBP', label: 'LBP' },
+  Indonesia: { code: 'IDR', label: 'IDR (Rp)' },
+  Thailand: { code: 'THB', label: 'THB (฿)' },
+  Vietnam: { code: 'VND', label: 'VND (₫)' },
+  Malaysia: { code: 'MYR', label: 'MYR (RM)' },
+  'Saudi Arabia': { code: 'SAR', label: 'SAR' },
+  Qatar: { code: 'QAR', label: 'QAR' },
+  Kuwait: { code: 'KWD', label: 'KWD' },
+  Bahrain: { code: 'BHD', label: 'BHD' },
+  Oman: { code: 'OMR', label: 'OMR' },
+}
 
 type TravelerForm = {
   firstName: string
@@ -77,7 +109,68 @@ type TravelInfo = {
   agentReferral: string
 }
 
-type UploadEntry = { fileName: string; sizeMb: string }
+type UploadEntry = { fileName: string; sizeMb: string; fromPersonalStep?: boolean }
+
+function passportUploadKey(travelerIndex: number): string {
+  return `${travelerIndex}-passport`
+}
+
+function buildPassportUploadEntry(file: File, fromPersonalStep = true): UploadEntry {
+  return {
+    fileName: file.name,
+    sizeMb: formatFileSize(file.size),
+    fromPersonalStep,
+  }
+}
+
+function syncPassportFilesToUploads(
+  travelers: TravelerForm[],
+  uploads: Record<string, UploadEntry>,
+): Record<string, UploadEntry> {
+  let next = uploads
+  let changed = false
+  travelers.forEach((traveler, index) => {
+    const file = traveler.passportFile
+    const key = passportUploadKey(index)
+    if (!file) return
+    const entry = buildPassportUploadEntry(file, true)
+    const existing = next[key]
+    if (!existing || existing.fileName !== entry.fileName || existing.sizeMb !== entry.sizeMb) {
+      if (!changed) {
+        next = { ...uploads }
+        changed = true
+      }
+      next[key] = entry
+    }
+  })
+  return next
+}
+
+function getTravelerDocEntry(
+  travelerIndex: number,
+  docId: string,
+  traveler: TravelerForm,
+  uploads: Record<string, UploadEntry>,
+): UploadEntry | undefined {
+  const key = `${travelerIndex}-${docId}`
+  if (uploads[key]) return uploads[key]
+  if (docId === 'passport' && traveler.passportFile) {
+    return buildPassportUploadEntry(traveler.passportFile, true)
+  }
+  return undefined
+}
+
+function hasTravelerDocUploaded(
+  travelerIndex: number,
+  doc: DocDef,
+  traveler: TravelerForm,
+  uploads: Record<string, UploadEntry>,
+  uploadErrors: Record<string, string>,
+): boolean {
+  const key = `${travelerIndex}-${doc.id}`
+  if (uploadErrors[key]) return false
+  return Boolean(getTravelerDocEntry(travelerIndex, doc.id, traveler, uploads))
+}
 
 type FormData = {
   travelers: TravelerForm[]
@@ -160,7 +253,7 @@ function docRequirementToDocDef(doc: DocumentRequirement): DocDef {
   }
 }
 
-function emptyTraveler(nationality: string): TravelerForm {
+function emptyTraveler(): TravelerForm {
   return {
     firstName: '',
     lastName: '',
@@ -171,7 +264,7 @@ function emptyTraveler(nationality: string): TravelerForm {
     emiratesIdExpiry: '',
     mobile: '',
     email: '',
-    nationality,
+    nationality: '',
     gender: '',
   }
 }
@@ -227,13 +320,46 @@ function ocrDateToDisplay(ddmmyyyy: string): string {
   return formatDateLabel(d)
 }
 
-function mapNationalityFromOcr(value: string): string {
-  if (!value) return ''
-  const upper = value.toUpperCase().trim()
-  if (MRZ_NATIONALITY[upper]) return MRZ_NATIONALITY[upper]
-  const byName = ALL_CITIZENSHIPS.find((c) => c.name.toLowerCase() === value.toLowerCase())
-  if (byName) return byName.name
-  return value
+function mapNationalityFromOcr(value: string, rawText = ''): string {
+  const tryCode = (code: string): string => {
+    const upper = code.toUpperCase().trim()
+    if (!upper) return ''
+    if (MRZ_NATIONALITY[upper]) return MRZ_NATIONALITY[upper]
+    const byCode = ALL_CITIZENSHIPS.find((c) => c.code === upper)
+    return byCode?.name ?? ''
+  }
+
+  const fromValue = value.trim()
+  if (fromValue) {
+    const fromCode = tryCode(fromValue)
+    if (fromCode) return fromCode
+    const exact = ALL_CITIZENSHIPS.find((c) => c.name.toLowerCase() === fromValue.toLowerCase())
+    if (exact) return exact.name
+    const partial = ALL_CITIZENSHIPS.find(
+      (c) =>
+        c.name.toLowerCase().includes(fromValue.toLowerCase()) ||
+        fromValue.toLowerCase().includes(c.name.toLowerCase()),
+    )
+    if (partial) return partial.name
+  }
+
+  if (rawText) {
+    const lines = rawText
+      .split('\n')
+      .map((l) => l.toUpperCase().replace(/[^A-Z0-9<]/g, ''))
+      .filter((l) => l.length >= 28)
+    for (const line of lines) {
+      const codes: string[] = []
+      if (line.startsWith('P<')) codes.push(line.slice(2, 5).replace(/</g, ''))
+      if (line.length >= 13) codes.push(line.slice(10, 13).replace(/</g, ''))
+      for (const code of codes) {
+        const mapped = tryCode(code)
+        if (mapped) return mapped
+      }
+    }
+  }
+
+  return ''
 }
 
 function emptyTravelInfo(): TravelInfo {
@@ -335,6 +461,7 @@ const passportLengthRules: Record<string, { min: number; max: number; pattern: s
   Egypt: { min: 9, max: 9, pattern: '[A-Z][0-9]{8}' },
   Nigeria: { min: 8, max: 9, pattern: '[A-Z][0-9]{7,8}' },
   'Sri Lanka': { min: 8, max: 9, pattern: '[A-Z][0-9]{7,8}' },
+  Indonesia: { min: 7, max: 9, pattern: '[A-Z0-9]{7,9}' },
   Nepal: { min: 8, max: 8, pattern: '[A-Z][0-9]{7}' },
   default: { min: 6, max: 20, pattern: '[A-Z0-9]+' },
 }
@@ -375,13 +502,28 @@ function validatePassportNumber(
   return { valid: true, error: null }
 }
 
+function resolveNationalityName(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  const exact = ALL_CITIZENSHIPS.find((c) => c.name.toLowerCase() === trimmed.toLowerCase())
+  return exact?.name ?? ''
+}
+
+function getSalaryCurrencyOptions(nationality: string): SalaryCurrencyOption[] {
+  const resolved = resolveNationalityName(nationality) || nationality.trim()
+  const local = resolved ? NATIONALITY_SALARY_CURRENCY[resolved] : undefined
+  if (!local) return BASE_SALARY_CURRENCIES
+  if (BASE_SALARY_CURRENCIES.some((c) => c.code === local.code)) return BASE_SALARY_CURRENCIES
+  return [local, ...BASE_SALARY_CURRENCIES]
+}
+
 function isTravelerComplete(
   t: TravelerForm,
   residenceCountry: string,
-  passportCountry: string,
   residencyStatus: string,
 ): boolean {
-  const fields = getResidenceFieldRequirements(residenceCountry, passportCountry, residencyStatus)
+  const nationality = resolveNationalityName(t.nationality)
+  const fields = getResidenceFieldRequirements(residenceCountry, nationality, residencyStatus)
   const base =
     t.firstName.trim() &&
     t.lastName.trim() &&
@@ -391,8 +533,8 @@ function isTravelerComplete(
     t.mobile.trim() &&
     t.email.trim() &&
     isValidEmail(t.email) &&
-    t.nationality.trim() &&
-    validatePassportNumber(t.passportNumber, t.nationality).valid
+    nationality &&
+    validatePassportNumber(t.passportNumber, nationality).valid
   if (!base) return false
   if (fields.showPermitExpiry && !t.uaeVisaExpiry) return false
   if (fields.showEmiratesId && !t.emiratesIdExpiry) return false
@@ -449,6 +591,56 @@ function AutoFilledBadge() {
       Auto-filled
     </span>
   )
+}
+
+function FieldHintBadge({ children }: { children: ReactNode }) {
+  return (
+    <span
+      style={{
+        background: '#f0fff4',
+        color: '#16a34a',
+        borderRadius: 6,
+        padding: '3px 8px',
+        fontSize: 11,
+        fontWeight: 600,
+        lineHeight: 1.2,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {children}
+    </span>
+  )
+}
+
+function calculateAgeYears(dob: Date, today: Date): number {
+  let age = today.getFullYear() - dob.getFullYear()
+  const monthDiff = today.getMonth() - dob.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1
+  }
+  return age
+}
+
+function monthsUntilExpiry(expiry: Date, today: Date): number {
+  return (
+    (expiry.getFullYear() - today.getFullYear()) * 12 +
+    (expiry.getMonth() - today.getMonth()) +
+    (expiry.getDate() >= today.getDate() ? 0 : -1)
+  )
+}
+
+function getDateFieldHint(value: string, mode: 'dob' | 'expiry'): string | null {
+  const parsed = parseDobDisplay(value)
+  if (!parsed) return null
+  const today = startOfDay(new Date())
+  if (mode === 'dob') {
+    if (parsed > today) return null
+    const age = calculateAgeYears(parsed, today)
+    return `${age} yrs`
+  }
+  const months = monthsUntilExpiry(parsed, today)
+  if (months < 0) return 'Expired'
+  return `${months} mo`
 }
 
 function FieldLabel({ children, autoFilled }: { children: ReactNode; autoFilled?: boolean }) {
@@ -661,6 +853,9 @@ function PassportUploadSection({
           </div>
           <p style={{ color: '#16a34a', fontSize: 12, marginTop: 8, marginBottom: 8 }}>
             ✓ All fields filled below — you can edit any detail
+          </p>
+          <p style={{ color: '#16a34a', fontSize: 12, margin: '0 0 8px' }}>
+            ✓ Passport file saved — no need to upload again on the Documents step
           </p>
           <button
             type="button"
@@ -900,20 +1095,38 @@ function DatePickerField({
     return false
   }
 
+  const hint = getDateFieldHint(value, mode)
+
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          ...borderInputStyle,
-          textAlign: 'left',
-          cursor: 'pointer',
-          color: value ? '#111' : '#999',
-        }}
-      >
-        {value || placeholder}
-      </button>
+      <div style={{ position: 'relative' }}>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          style={{
+            ...borderInputStyle,
+            textAlign: 'left',
+            cursor: 'pointer',
+            color: value ? '#111' : '#999',
+            paddingRight: hint ? 72 : undefined,
+          }}
+        >
+          {value || placeholder}
+        </button>
+        {hint && (
+          <span
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              pointerEvents: 'none',
+            }}
+          >
+            <FieldHintBadge>{hint}</FieldHintBadge>
+          </span>
+        )}
+      </div>
       {open && (
         <div
           style={{
@@ -1037,18 +1250,22 @@ function NationalityInput({
   value,
   onChange,
   defaultNationality,
+  invalid,
+  onBlur,
 }: {
   value: string
   onChange: (v: string) => void
   defaultNationality: string
+  invalid?: boolean
+  onBlur?: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState(value || defaultNationality)
+  const [query, setQuery] = useState(value)
   const wrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    setQuery(value || defaultNationality)
-  }, [value, defaultNationality])
+    setQuery(value)
+  }, [value])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -1066,27 +1283,78 @@ function NationalityInput({
     ).slice(0, 30)
   }, [query])
 
-  const selectedCode = ALL_CITIZENSHIPS.find((c) => c.name === value)?.code
+  const selectedEntry = ALL_CITIZENSHIPS.find((c) => c.name.toLowerCase() === value.trim().toLowerCase())
+  const selectedCode = selectedEntry?.code ?? null
+  const hint = selectedCode ?? null
+
+  const commitQuery = () => {
+    const trimmed = query.trim()
+    if (!trimmed) {
+      onChange('')
+      setQuery('')
+      return
+    }
+    const exact = ALL_CITIZENSHIPS.find((c) => c.name.toLowerCase() === trimmed.toLowerCase())
+    if (exact) {
+      onChange(exact.name)
+      setQuery(exact.name)
+    }
+  }
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
       <div style={{ position: 'relative' }}>
         {selectedCode && (
-          <img
-            src={flagUrl(selectedCode, 20)}
-            alt=""
-            width={20}
-            height={14}
-            style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', marginTop: 3, borderRadius: 2, objectFit: 'cover' }}
-          />
+          <span
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              marginTop: 3,
+              pointerEvents: 'none',
+            }}
+          >
+            <CountryFlag code={selectedCode} countryName={value} size="sm" />
+          </span>
         )}
         <input
-          style={{ ...borderInputStyle, paddingLeft: selectedCode ? 28 : 0 }}
+          style={{
+            ...borderInputStyle,
+            paddingLeft: selectedCode ? 30 : 0,
+            paddingRight: hint ? 52 : undefined,
+          }}
           value={query}
           onChange={(e) => { setQuery(e.target.value); onChange(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
-          placeholder="Search nationality"
+          onBlur={() => {
+            window.setTimeout(() => {
+              setOpen(false)
+              commitQuery()
+              onBlur?.()
+            }, 150)
+          }}
+          placeholder={defaultNationality ? `Search nationality (e.g. ${defaultNationality})` : 'Search nationality'}
         />
+        {invalid && !value && (
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>Select a nationality from the list</p>
+        )}
+        {invalid && value && !resolveNationalityName(value) && (
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>Choose a matching country from the dropdown</p>
+        )}
+        {hint && (
+          <span
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              pointerEvents: 'none',
+            }}
+          >
+            <FieldHintBadge>{hint}</FieldHintBadge>
+          </span>
+        )}
       </div>
       {open && filtered.length > 0 && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, maxHeight: 220, overflowY: 'auto', background: '#fff', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: '1px solid #eee', zIndex: 1000, padding: 8 }}>
@@ -1097,7 +1365,7 @@ function NationalityInput({
               onClick={() => { onChange(c.name); setQuery(c.name); setOpen(false) }}
               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: '1px solid #eee', borderRadius: 40, padding: '8px 14px', fontSize: 13, cursor: 'pointer', background: '#fff', marginBottom: 4, textAlign: 'left' }}
             >
-              <img src={flagUrl(c.code, 20)} alt="" width={20} height={14} style={{ borderRadius: 2, objectFit: 'cover' }} />
+              <CountryFlag code={c.code} countryName={c.name} size="sm" />
               {c.name}
             </button>
           ))}
@@ -1311,33 +1579,193 @@ type CheckoutFormProps = {
   departureDate: Date | null
   returnDate: Date | null
   pricing: { gov: number; processing: number; discount: number; total: number }
+  docsComplete: boolean
+  passportCode: string
+  uploads: Record<string, UploadEntry>
+  mockCheckout?: boolean
 }
 
-function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate, returnDate, pricing }: CheckoutFormProps) {
+function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate, returnDate, pricing, docsComplete, uploads, mockCheckout = false }: CheckoutFormProps) {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const stripe = useStripe()
   const elements = useElements()
   const [paying, setPaying] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
+  const [payMethod, setPayMethod] = useState<'card' | 'bank'>('card')
 
-  const primaryName = `${travelers[0]?.firstName ?? ''} ${travelers[0]?.lastName ?? ''}`.trim() || 'Guest Traveler'
+  const primary = travelers[0]
+  const primaryName = `${primary?.firstName ?? ''} ${primary?.lastName ?? ''}`.trim() || 'Guest Traveler'
+  const customerEmail = (primary?.email?.trim() || user?.email?.trim() || '').toLowerCase()
   const travelersCount = travelers.length
 
-  const goToInvoice = (status: 'success' | 'failed') => {
-    const invoiceNo = `ATL${Date.now().toString().slice(-8)}`
+  const finalizeAndNavigate = (status: 'success' | 'failed' | 'unpaid', paymentSuccess: boolean) => {
     const today = formatDateLabel(new Date())
+    const due = new Date()
+    due.setDate(due.getDate() + 7)
     const subtotal = pricing.gov * travelersCount + pricing.processing * travelersCount - pricing.discount
+    const paymentMethod = payMethod === 'bank' ? 'Bank Transfer' : 'Card'
+
+    let applicationId = ''
+    let invoiceId = ''
+    if (customerEmail) {
+      const dbUser =
+        Database.getUserByEmail(customerEmail)
+        ?? Database.createUser({
+          fullName: primaryName,
+          email: customerEmail,
+          phone: (primary as { phone?: string })?.phone ?? '',
+          phoneCode: '+971',
+          passportCountry: primary?.nationality ?? 'Unknown',
+          residenceCountry: 'UAE',
+          residencyStatus: 'Resident',
+          isVerified: true,
+          profilePhoto: null,
+          lastLogin: new Date().toISOString(),
+        })
+      localStorage.setItem('current_user_id', String(dbUser.id))
+
+      const docRecords = Object.entries(uploads).map(([key, entry]) => ({
+        id: `doc_${key}`,
+        type: key.split('-').slice(1).join('-'),
+        fileName: entry.fileName,
+        status: 'pending_review',
+        uploadedAt: new Date().toISOString(),
+      }))
+
+      const appStatus =
+        status === 'success'
+          ? docsComplete
+            ? 'under_review'
+            : 'pending_docs'
+          : status === 'failed'
+            ? 'payment_failed'
+            : 'payment_pending'
+
+      const dbApplication = Database.createApplication({
+        type: 'b2c',
+        userId: String(dbUser.id),
+        partnerId: null,
+        destination: country.slug,
+        destinationName: country.name,
+        visaOption: selectedOption.label,
+        travelers,
+        travelDates: {
+          departure: departureDate ? departureDate.toISOString().slice(0, 10) : null,
+          return: returnDate ? returnDate.toISOString().slice(0, 10) : null,
+        },
+        documents: docRecords,
+        status: appStatus,
+        evisaSupported: country.visaType === 'e-Visa',
+        submissionMethod: country.visaType === 'e-Visa' ? 'automated' : 'manual',
+        assignedOperator: null,
+        amount: {
+          governmentFee: pricing.gov,
+          processingFee: pricing.processing,
+          discount: pricing.discount,
+          total: pricing.total,
+        },
+        paymentStatus: paymentSuccess ? 'paid' : 'pending',
+        paymentMethod: payMethod === 'bank' ? 'bank_transfer' : 'card',
+        countryCode: country.countryCode,
+      })
+      applicationId = String(dbApplication.id)
+
+      const vat = Number((pricing.total * 0.05).toFixed(2))
+      const grandTotal = Number((pricing.total + vat).toFixed(2))
+      const invoice = Database.createInvoice({
+        applicationId,
+        type: 'b2c',
+        customerName: primaryName,
+        destination: country.name,
+        amount: pricing.total,
+        governmentFee: pricing.gov,
+        processingFee: pricing.processing,
+        vat,
+        total: grandTotal,
+        status: paymentSuccess ? 'paid' : 'unpaid',
+        paymentMethod: paymentSuccess ? 'card' : payMethod === 'bank' ? 'bank_transfer' : null,
+        dueDate: due.toISOString(),
+        paidAt: paymentSuccess ? new Date().toISOString() : null,
+        countryCode: country.countryCode,
+      })
+      invoiceId = String(invoice.id)
+
+      if (paymentSuccess) {
+        Database.createPayment({
+          invoiceId,
+          applicationId,
+          amount: grandTotal,
+          method: 'card',
+          gateway: 'stripe',
+          status: 'success',
+        })
+      }
+
+      Database.logActivity(
+        'application_created',
+        `New B2C application — ${primaryName} — ${country.name}`,
+        applicationId,
+        String(dbUser.id),
+        'customer',
+      )
+    }
+
     const params = new URLSearchParams({
-      status, name: primaryName, amount: String(pricing.total),
-      country: country.name, option: selectedOption.label, invoiceNo, date: today,
-      travelers: String(travelersCount), govFee: String(pricing.gov),
-      processingFee: String(pricing.processing), discount: String(pricing.discount),
-      subtotal: String(subtotal), countryCode: country.countryCode,
+      status,
+      name: primaryName,
+      email: customerEmail,
+      amount: String(pricing.total),
+      country: country.name,
+      option: selectedOption.label,
+      date: today,
+      travelers: String(travelersCount),
+      govFee: String(pricing.gov),
+      processingFee: String(pricing.processing),
+      discount: String(pricing.discount),
+      subtotal: String(subtotal),
+      countryCode: country.countryCode,
+      paymentMethod,
+      applicationId,
+      invoiceId,
     })
+    if (payMethod === 'bank') {
+      params.set('dueDate', due.toISOString().slice(0, 10))
+    }
     navigate(`/invoice?${params.toString()}`)
   }
 
+  const handleBankTransfer = () => {
+    if (!customerEmail) {
+      setPayError('Please enter a valid email on the Personal Details step.')
+      return
+    }
+    setPayError(null)
+    finalizeAndNavigate('unpaid', false)
+  }
+
+  const handleMockPay = () => {
+    if (!customerEmail) {
+      setPayError('Please enter a valid email on the Personal Details step.')
+      return
+    }
+    setPayError(null)
+    setPaying(true)
+    window.setTimeout(() => {
+      setPaying(false)
+      finalizeAndNavigate('success', true)
+    }, 600)
+  }
+
   const handlePay = async () => {
+    if (mockCheckout) {
+      handleMockPay()
+      return
+    }
+    if (!customerEmail) {
+      setPayError('Please enter a valid email on the Personal Details step.')
+      return
+    }
     if (!stripe || !elements) return
     const card = elements.getElement(CardElement)
     if (!card) return
@@ -1347,10 +1775,9 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
     if (error) {
       setPaying(false)
       setPayError(error.message ?? 'Payment failed')
-      goToInvoice('failed')
       return
     }
-    goToInvoice('success')
+    finalizeAndNavigate('success', true)
   }
 
   const dateRange = departureDate && returnDate
@@ -1397,31 +1824,139 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
       </div>
 
       <div style={{ background: '#fff', borderRadius: 16, padding: 24, marginBottom: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-        <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 15 }}>Card details</p>
-        <div style={{ border: '1px solid #eee', borderRadius: 12, padding: 16, background: '#fff' }}>
-          <CardElement options={{ hidePostalCode: true, style: { base: { fontSize: '16px', color: '#1a1a1a', fontFamily: 'system-ui, sans-serif', '::placeholder': { color: '#aaa' } } } }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>
-          {['Visa', 'MC', 'Amex'].map((card) => (
-            <span key={card} style={{ background: '#f5f5f5', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#555', border: '1px solid #e5e5e5' }}>{card}</span>
+        <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 15 }}>Payment method</p>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          {([
+            { key: 'card' as const, label: '💳 Pay by Card (Stripe)' },
+            { key: 'bank' as const, label: '🏦 Bank Transfer' },
+          ]).map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => setPayMethod(m.key)}
+              style={{
+                flex: 1,
+                padding: '12px 14px',
+                borderRadius: 12,
+                border: payMethod === m.key ? `2px solid ${ACCENT}` : '1px solid #eee',
+                background: payMethod === m.key ? '#f0f0ff' : '#fff',
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              {m.label}
+            </button>
           ))}
         </div>
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: '#888', textAlign: 'center' }}>🔒 Secured by Stripe</p>
+
+        {payMethod === 'card' ? (
+          <>
+            {(stripeTestMode || mockCheckout) && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: '10px 14px',
+                  background: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  color: '#92400e',
+                  lineHeight: 1.5,
+                }}
+              >
+                {mockCheckout ? (
+                  <>
+                    <strong>Dev test mode</strong> — no real Stripe charge. Click Pay to simulate a successful
+                    payment and open the success invoice.
+                  </>
+                ) : (
+                  <>
+                    <strong>Stripe test mode</strong> — use card <code>4242 4242 4242 4242</code>, any future
+                    expiry, any CVC. No real money is charged.
+                  </>
+                )}
+              </div>
+            )}
+            {!mockCheckout && !stripeConfigured && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: '10px 14px',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  color: '#991b1b',
+                }}
+              >
+                Add <code>VITE_STRIPE_PUBLISHABLE_KEY=pk_test_…</code> to your <code>.env</code> file and restart
+                the dev server to enable card payments.
+              </div>
+            )}
+            <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 15 }}>Card details</p>
+            {mockCheckout ? (
+              <div
+                style={{
+                  border: '1px dashed #c7d2fe',
+                  borderRadius: 12,
+                  padding: 20,
+                  background: '#f8f9ff',
+                  fontSize: 13,
+                  color: '#555',
+                  textAlign: 'center',
+                }}
+              >
+                Card form skipped in dev mock mode
+              </div>
+            ) : (
+              <>
+                <div style={{ border: '1px solid #eee', borderRadius: 12, padding: 16, background: '#fff' }}>
+                  <CardElement options={{ hidePostalCode: true, style: { base: { fontSize: '16px', color: '#1a1a1a', fontFamily: 'system-ui, sans-serif', '::placeholder': { color: '#aaa' } } } }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>
+                  {['Visa', 'MC', 'Amex'].map((card) => (
+                    <span key={card} style={{ background: '#f5f5f5', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#555', border: '1px solid #e5e5e5' }}>{card}</span>
+                  ))}
+                </div>
+              </>
+            )}
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#888', textAlign: 'center' }}>🔒 Secured by Stripe</p>
+          </>
+        ) : (
+          <div style={{ background: '#f8f9fc', borderRadius: 12, padding: 16, fontSize: 13, color: '#555', lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#111' }}>Bank transfer instructions</p>
+            <p style={{ margin: 0 }}>You will receive an invoice with our bank details. Your application appears in our operations queue once you confirm. Transfer within 7 days.</p>
+            <p style={{ margin: '12px 0 0', fontSize: 12, color: '#888' }}>IBAN: AE07 0331 2345 6789 0123 456 · Ref: your invoice number</p>
+          </div>
+        )}
       </div>
 
       {payError && <p style={{ margin: '0 0 12px', color: '#dc2626', fontSize: 14, textAlign: 'center' }}>{payError}</p>}
 
-      <button
-        type="button"
-        disabled={!stripe || paying}
-        onClick={handlePay}
-        style={{ width: '100%', background: BRAND, color: '#fff', border: 'none', borderRadius: 12, padding: 16, fontSize: 16, fontWeight: 700, cursor: paying ? 'wait' : 'pointer' }}
-      >
-        {paying ? 'Processing…' : `Pay AED ${pricing.total}`}
-      </button>
+      {payMethod === 'card' ? (
+        <button
+          type="button"
+          disabled={(!mockCheckout && !stripe) || paying}
+          onClick={() => void handlePay()}
+          style={{ width: '100%', background: BRAND, color: '#fff', border: 'none', borderRadius: 12, padding: 16, fontSize: 16, fontWeight: 700, cursor: paying ? 'wait' : 'pointer' }}
+        >
+          {paying ? 'Processing…' : mockCheckout ? `Test Pay AED ${pricing.total}` : `Pay AED ${pricing.total}`}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={handleBankTransfer}
+          style={{ width: '100%', background: ACCENT, color: '#fff', border: 'none', borderRadius: 12, padding: 16, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}
+        >
+          Confirm & Get Bank Invoice — AED {pricing.total}
+        </button>
+      )}
 
       <p style={{ margin: '12px 0 0', fontSize: 12, color: '#888', textAlign: 'center' }}>
-        Test card: 4242 4242 4242 4242 | Exp: 12/29 | CVV: 123
+        {mockCheckout
+          ? 'Simulated checkout — for local testing only'
+          : 'Test card: 4242 4242 4242 4242 | Exp: any future date | CVV: any 3 digits'}
       </p>
 
       <div style={{ marginTop: 20, background: 'linear-gradient(135deg,#1a1a2e,#2d2d5e)', borderRadius: 16, padding: 16, color: '#fff', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1445,9 +1980,8 @@ export default function ApplyPage() {
     residencyStatus,
     setResidenceCountry,
     setResidencyStatus,
-    openCitizenshipModal,
   } = useCitizenship()
-  const { isLoggedIn } = useAuth()
+  const { isLoggedIn, user } = useAuth()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
 
   const destination = searchParams.get('destination') ?? ''
@@ -1458,7 +1992,7 @@ export default function ApplyPage() {
   const selectedOption = country?.visaOptions.find((o) => o.id === optionId) ?? country?.visaOptions[0]
 
   const [formData, setFormData] = useState<FormData>(() => ({
-    travelers: [emptyTraveler(citizenship)],
+    travelers: [emptyTraveler()],
     travelInfo: emptyTravelInfo(),
     uploads: {},
     departureDate: null,
@@ -1474,6 +2008,7 @@ export default function ApplyPage() {
 
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({})
   const [emailTouched, setEmailTouched] = useState<Record<number, boolean>>({})
+  const [nationalityTouched, setNationalityTouched] = useState<Record<number, boolean>>({})
   const [isScanning, setIsScanning] = useState<Record<number, boolean>>({})
   const [scanProgress, setScanProgress] = useState<Record<number, number>>({})
   const [scanResult, setScanResult] = useState<Record<number, 'success' | 'failed' | 'pdf' | null>>({})
@@ -1494,13 +2029,33 @@ export default function ApplyPage() {
   }, [])
 
   useEffect(() => {
-    setFormData((prev) => ({
-      ...prev,
-      travelers: prev.travelers.map((t, i) =>
-        i === 0 && !t.nationality ? { ...t, nationality: citizenship } : t,
-      ),
-    }))
-  }, [citizenship])
+    const accountEmail = user?.email?.trim().toLowerCase()
+    if (!accountEmail) return
+
+    setFormData((prev) => {
+      const traveler = prev.travelers[0]
+      if (!traveler || traveler.email.trim()) return prev
+      return {
+        ...prev,
+        travelers: prev.travelers.map((t, i) => (i === 0 ? { ...t, email: accountEmail } : t)),
+      }
+    })
+
+    setAutoFilledFields((prev) => {
+      const fields = prev[0] ?? []
+      if (fields.includes('email')) return prev
+      return { ...prev, 0: [...fields, 'email'] }
+    })
+  }, [user?.email])
+
+  useEffect(() => {
+    if (step !== 'docs') return
+    setFormData((prev) => {
+      const uploads = syncPassportFilesToUploads(prev.travelers, prev.uploads)
+      if (uploads === prev.uploads) return prev
+      return { ...prev, uploads }
+    })
+  }, [step, travelers])
 
   const today = useMemo(() => startOfDay(new Date()), [])
   const maxDeparture = useMemo(() => addDays(today, 365), [today])
@@ -1524,23 +2079,57 @@ export default function ApplyPage() {
 
   const visaRequirements = useMemo(() => {
     if (!country) return null
+    const applicantNationality = travelers[0]?.nationality?.trim() || citizenship
     return getVisaRequirements(
-      citizenship,
+      applicantNationality,
       residenceCountry,
       residencyStatus,
       country.slug,
     )
-  }, [country, citizenship, residenceCountry, residencyStatus])
+  }, [country, citizenship, travelers, residenceCountry, residencyStatus])
 
-  const residenceFields = getResidenceFieldRequirements(
-    residenceCountry,
-    citizenship,
-    residencyStatus,
+  const primaryNationality = travelers[0]?.nationality?.trim() || citizenship
+  const salaryCurrencyOptions = useMemo(
+    () => getSalaryCurrencyOptions(primaryNationality),
+    [primaryNationality],
   )
+
+  useEffect(() => {
+    const codes = salaryCurrencyOptions.map((c) => c.code)
+    setFormData((prev) => {
+      if (codes.includes(prev.travelInfo.salaryCurrency)) return prev
+      return {
+        ...prev,
+        travelInfo: { ...prev.travelInfo, salaryCurrency: codes[0] ?? 'AED' },
+      }
+    })
+  }, [salaryCurrencyOptions])
 
   const personalComplete =
     travelers.length > 0 &&
-    travelers.every((t) => isTravelerComplete(t, residenceCountry, citizenship, residencyStatus))
+    travelers.every((t) => isTravelerComplete(t, residenceCountry, residencyStatus))
+
+  const personalMissingHint = useMemo(() => {
+    if (personalComplete || travelers.length === 0) return null
+    const t = travelers[0]
+    const nationality = resolveNationalityName(t.nationality)
+    const fields = getResidenceFieldRequirements(residenceCountry, nationality, residencyStatus)
+    if (!t.firstName.trim()) return 'Enter first name'
+    if (!t.lastName.trim()) return 'Enter last name'
+    if (!t.dateOfBirth) return 'Select date of birth'
+    if (!nationality) return 'Select nationality from the dropdown'
+    if (!t.passportNumber.trim() || !validatePassportNumber(t.passportNumber, nationality).valid) {
+      return 'Enter a valid passport number'
+    }
+    if (!t.passportExpiry) return 'Select passport expiry date'
+    if (!t.mobile.trim()) return 'Enter mobile number'
+    if (!t.email.trim() || !isValidEmail(t.email)) return 'Enter a valid email address'
+    if (fields.showPermitExpiry && !t.uaeVisaExpiry) return `Select ${fields.permitLabel.replace(' *', '')}`
+    if (fields.showEmiratesId && !t.emiratesIdExpiry) {
+      return `Select ${(fields.emiratesLabel ?? 'National ID Expiry Date').replace(' *', '')}`
+    }
+    return 'Complete all required traveller fields'
+  }, [personalComplete, travelers, residenceCountry, residencyStatus])
 
   const travelComplete = isTravelInfoComplete(travelInfo)
 
@@ -1555,11 +2144,8 @@ export default function ApplyPage() {
 
   const docsComplete = useMemo(() => {
     if (!country) return false
-    return travelers.every((_, ti) =>
-      requiredDocs.every((doc) => {
-        const key = `${ti}-${doc.id}`
-        return uploads[key] && !uploadErrors[key]
-      }),
+    return travelers.every((traveler, ti) =>
+      requiredDocs.every((doc) => hasTravelerDocUploaded(ti, doc, traveler, uploads, uploadErrors)),
     )
   }, [travelers, requiredDocs, uploads, uploadErrors, country])
 
@@ -1630,6 +2216,30 @@ export default function ApplyPage() {
       delete next[travelerIndex]
       return next
     })
+    const uploadKey = passportUploadKey(travelerIndex)
+    setFormData((prev) => {
+      if (!prev.uploads[uploadKey] && !prev.travelers[travelerIndex]?.passportFile) return prev
+      const nextUploads = { ...prev.uploads }
+      delete nextUploads[uploadKey]
+      return {
+        ...prev,
+        uploads: nextUploads,
+        travelers: prev.travelers.map((t, i) =>
+          i === travelerIndex ? { ...t, passportFile: undefined } : t,
+        ),
+      }
+    })
+  }
+
+  const attachPassportFile = (travelerIndex: number, file: File) => {
+    setFormData((prev) => ({
+      ...prev,
+      travelers: prev.travelers.map((t, i) => (i === travelerIndex ? { ...t, passportFile: file } : t)),
+      uploads: {
+        ...prev.uploads,
+        [passportUploadKey(travelerIndex)]: buildPassportUploadEntry(file),
+      },
+    }))
   }
 
   const handlePassportUpload = async (file: File, travelerIndex: number) => {
@@ -1644,6 +2254,8 @@ export default function ApplyPage() {
       return
     }
 
+    attachPassportFile(travelerIndex, file)
+
     const previewUrl = URL.createObjectURL(file)
     setPreviewUrls((prev) => ({ ...prev, [travelerIndex]: previewUrl }))
     setPreviewIsPdf((prev) => ({ ...prev, [travelerIndex]: file.type === 'application/pdf' }))
@@ -1652,20 +2264,23 @@ export default function ApplyPage() {
     setScanResult((prev) => ({ ...prev, [travelerIndex]: null }))
 
     try {
-      const data = await scanPassport(file, (progress) => {
+      const engine = getPreferredOcrEngine()
+      const data = await scanPassportDocument(file, (progress) => {
         setScanProgress((prev) => ({ ...prev, [travelerIndex]: progress }))
       })
 
-      const mappedNationality = mapNationalityFromOcr(data.nationality)
+      const mappedNationality = mapNationalityFromOcr(data.nationality, data.rawText)
       const displayDob = data.dateOfBirth ? ocrDateToDisplay(data.dateOfBirth) : ''
       const displayExpiry = data.expiryDate ? ocrDateToDisplay(data.expiryDate) : ''
 
+      const shouldAutoFill = engine ? isOcrAutoFillEnabled(engine) : false
       const filledFields: string[] = []
       setFormData((prev) => ({
         ...prev,
         travelers: prev.travelers.map((t, i) => {
           if (i !== travelerIndex) return t
           const next = { ...t, passportFile: file }
+          if (!shouldAutoFill) return next
           if (!t.firstName && data.firstName) {
             next.firstName = data.firstName.toUpperCase()
             filledFields.push('firstName')
@@ -1686,7 +2301,7 @@ export default function ApplyPage() {
             next.passportExpiry = displayExpiry
             filledFields.push('passportExpiry')
           }
-          if (!t.nationality && mappedNationality) {
+          if (shouldAutoFill && mappedNationality) {
             next.nationality = mappedNationality
             filledFields.push('nationality')
           }
@@ -1713,14 +2328,20 @@ export default function ApplyPage() {
       console.error('Scan error:', err)
       const message = err instanceof Error ? err.message : ''
       if (message === 'PDF_NOT_SUPPORTED') {
-        setFormData((prev) => ({
-          ...prev,
-          travelers: prev.travelers.map((t, i) =>
-            i === travelerIndex ? { ...t, passportFile: file } : t,
-          ),
-        }))
+        attachPassportFile(travelerIndex, file)
         setScanResult((prev) => ({ ...prev, [travelerIndex]: 'pdf' }))
+      } else if (message === 'OCR_DISABLED') {
+        attachPassportFile(travelerIndex, file)
+        setScanResult((prev) => ({ ...prev, [travelerIndex]: 'failed' }))
+        window.alert('Passport scanning is disabled. Enable an OCR engine in Admin → Settings → OCR.')
+      } else if (message.includes('API key missing') || message === 'PASSPORT_OCR_API_KEY_MISSING') {
+        attachPassportFile(travelerIndex, file)
+        setScanResult((prev) => ({ ...prev, [travelerIndex]: 'failed' }))
+        window.alert(
+          'Passport OCR API is enabled but no API key is configured. Add your key in Admin → Settings → OCR or set PASSPORT_OCR_API_KEY in .env.',
+        )
       } else {
+        attachPassportFile(travelerIndex, file)
         setScanResult((prev) => ({ ...prev, [travelerIndex]: 'failed' }))
       }
     } finally {
@@ -1744,7 +2365,7 @@ export default function ApplyPage() {
   }
 
   const addTraveler = () => {
-    setFormData((prev) => ({ ...prev, travelers: [...prev.travelers, emptyTraveler(citizenship)] }))
+    setFormData((prev) => ({ ...prev, travelers: [...prev.travelers, emptyTraveler()] }))
   }
 
   const removeTraveler = (index: number) => {
@@ -1785,17 +2406,36 @@ export default function ApplyPage() {
       return
     }
     setUploadErrors((prev) => { const next = { ...prev }; delete next[uploadKey]; return next })
+    const travelerIndex = Number(uploadKey.split('-')[0])
+    const isPassportDoc = uploadKey.endsWith('-passport')
     setFormData((prev) => ({
       ...prev,
-      uploads: { ...prev.uploads, [uploadKey]: { fileName: file.name, sizeMb: formatFileSize(file.size) } },
+      uploads: {
+        ...prev.uploads,
+        [uploadKey]: { fileName: file.name, sizeMb: formatFileSize(file.size), fromPersonalStep: false },
+      },
+      travelers: isPassportDoc && !Number.isNaN(travelerIndex)
+        ? prev.travelers.map((t, i) => (i === travelerIndex ? { ...t, passportFile: file } : t))
+        : prev.travelers,
     }))
   }
 
   const removeUpload = (uploadKey: string) => {
+    const travelerIndex = Number(uploadKey.split('-')[0])
+    const isPassportDoc = uploadKey.endsWith('-passport')
     setFormData((prev) => {
       const next = { ...prev.uploads }
       delete next[uploadKey]
-      return { ...prev, uploads: next }
+      return {
+        ...prev,
+        uploads: next,
+        travelers:
+          isPassportDoc && !Number.isNaN(travelerIndex)
+            ? prev.travelers.map((t, i) =>
+                i === travelerIndex ? { ...t, passportFile: undefined } : t,
+              )
+            : prev.travelers,
+      }
     })
     setUploadErrors((prev) => { const next = { ...prev }; delete next[uploadKey]; return next })
   }
@@ -1809,18 +2449,30 @@ export default function ApplyPage() {
   const handlePersonalContinue = () => {
     if (!personalComplete) return
     markStepDone('personal')
+    setFormData((prev) => ({
+      ...prev,
+      uploads: syncPassportFilesToUploads(prev.travelers, prev.uploads),
+    }))
     goToStep('travel')
   }
 
   const handleTravelContinue = () => {
     if (!travelComplete) return
     markStepDone('travel')
+    setFormData((prev) => ({
+      ...prev,
+      uploads: syncPassportFilesToUploads(prev.travelers, prev.uploads),
+    }))
     goToStep('docs')
   }
 
   const handleDocsContinue = () => {
     if (!docsComplete) return
     markStepDone('docs')
+    setFormData((prev) => ({
+      ...prev,
+      uploads: syncPassportFilesToUploads(prev.travelers, prev.uploads),
+    }))
     goToStep('appt')
   }
 
@@ -1945,30 +2597,6 @@ export default function ApplyPage() {
                     onStatusChange={(s) => setResidencyStatus(s as ResidencyStatus)}
                     compact
                   />
-                  <div style={{ marginTop: 20 }}>
-                    <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#333' }}>
-                      My passport is from:
-                    </p>
-                    <button
-                      type="button"
-                      onClick={openCitizenshipModal}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        border: `1.5px solid ${BRAND}`,
-                        borderRadius: 40,
-                        padding: '8px 16px',
-                        background: '#fff8f8',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                        fontSize: 14,
-                      }}
-                    >
-                      <img src={flagUrl(countryCode, 24)} alt="" width={24} height={16} style={{ borderRadius: 2, objectFit: 'cover' }} />
-                      {citizenship}
-                    </button>
-                  </div>
                   {visaRequirements && (
                     <div
                       style={{
@@ -2001,6 +2629,12 @@ export default function ApplyPage() {
                   const passWarn = passportExpiryWarning(traveler.passportExpiry)
                   const permitWarn = permitExpiryWarning(traveler.uaeVisaExpiry)
                   const emailErr = emailTouched[index] && traveler.email && !isValidEmail(traveler.email)
+                  const nationalityErr = nationalityTouched[index] && !resolveNationalityName(traveler.nationality)
+                  const residenceFields = getResidenceFieldRequirements(
+                    residenceCountry,
+                    resolveNationalityName(traveler.nationality) || traveler.nationality,
+                    residencyStatus,
+                  )
                   return (
                     <div key={index} style={{ position: 'relative', background: '#fff', borderRadius: 20, padding: 28, marginBottom: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                       {index > 0 && (
@@ -2071,12 +2705,26 @@ export default function ApplyPage() {
                         </div>
                         <div style={{ gridColumn: isMobile ? '1' : '1 / -1' }}>
                           <FieldLabel autoFilled={isAutoFilled(index, 'email')}>Email Address *</FieldLabel>
-                          <input style={borderInputStyle} type="email" value={traveler.email} onChange={(e) => updateTraveler(index, 'email', e.target.value)} onBlur={() => setEmailTouched((p) => ({ ...p, [index]: true }))} />
+                          <input
+                            style={borderInputStyle}
+                            type="email"
+                            value={traveler.email}
+                            onChange={(e) => updateTraveler(index, 'email', e.target.value)}
+                            onBlur={() => setEmailTouched((p) => ({ ...p, [index]: true }))}
+                            placeholder={isLoggedIn && index === 0 ? 'your@email.com' : undefined}
+                            autoComplete="email"
+                          />
                           {emailErr && <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>Please enter a valid email address</p>}
                         </div>
                         <div style={{ gridColumn: isMobile ? '1' : '1 / -1' }}>
                           <FieldLabel autoFilled={isAutoFilled(index, 'nationality')}>Nationality *</FieldLabel>
-                          <NationalityInput value={traveler.nationality} defaultNationality={citizenship} onChange={(v) => updateTraveler(index, 'nationality', v)} />
+                          <NationalityInput
+                            value={traveler.nationality}
+                            defaultNationality={citizenship}
+                            invalid={nationalityErr}
+                            onChange={(v) => updateTraveler(index, 'nationality', v)}
+                            onBlur={() => setNationalityTouched((p) => ({ ...p, [index]: true }))}
+                          />
                         </div>
                       </div>
                     </div>
@@ -2125,8 +2773,10 @@ export default function ApplyPage() {
                       <label style={labelStyle}>Monthly Salary *</label>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input style={{ ...borderInputStyle, flex: 1 }} type="number" value={travelInfo.salary} onChange={(e) => updateTravelInfo('salary', e.target.value)} placeholder="Amount" />
-                        <select value={travelInfo.salaryCurrency} onChange={(e) => updateTravelInfo('salaryCurrency', e.target.value)} style={{ border: '1px solid #eee', borderRadius: 10, padding: '10px 12px', fontSize: 14 }}>
-                          {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        <select value={travelInfo.salaryCurrency} onChange={(e) => updateTravelInfo('salaryCurrency', e.target.value)} style={{ border: '1px solid #eee', borderRadius: 10, padding: '10px 12px', fontSize: 14, minWidth: 110 }}>
+                          {salaryCurrencyOptions.map((c) => (
+                            <option key={c.code} value={c.code}>{c.label}</option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -2170,7 +2820,9 @@ export default function ApplyPage() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'center' }}>
                   {travelers.map((traveler, ti) => {
                     const name = `${traveler.firstName} ${traveler.lastName}`.trim() || `Traveller ${ti + 1}`
-                    const uploadedCount = docList.filter((d) => uploads[`${ti}-${d.id}`]).length
+                    const uploadedCount = docList.filter((d) =>
+                      hasTravelerDocUploaded(ti, d, traveler, uploads, uploadErrors),
+                    ).length
                     return (
                       <div key={ti} style={{ background: '#fff', borderRadius: 20, padding: 20, minWidth: 280, flex: '1 1 280px', maxWidth: 460, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -2184,8 +2836,11 @@ export default function ApplyPage() {
                         </div>
                         {docList.map((doc) => {
                           const uploadKey = `${ti}-${doc.id}`
-                          const entry = uploads[uploadKey]
+                          const entry = getTravelerDocEntry(ti, doc.id, traveler, uploads)
                           const err = uploadErrors[uploadKey]
+                          const fromPersonal = Boolean(
+                            doc.id === 'passport' && entry?.fromPersonalStep && traveler.passportFile,
+                          )
                           return (
                             <div key={doc.id}>
                               <input ref={(el) => { fileInputRefs.current[uploadKey] = el }} type="file" accept={doc.accept} style={{ display: 'none' }} onChange={(e) => handleFileSelect(uploadKey, doc, e.target.files?.[0])} />
@@ -2210,12 +2865,22 @@ export default function ApplyPage() {
                                   <p style={{ margin: '2px 0 0', fontSize: 12, color: '#888' }}>{doc.description}</p>
                                   {err && <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>{err}</p>}
                                   {entry && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
                                       <span style={{ color: GREEN, fontWeight: 700 }}>✓</span>
                                       <span style={{ fontSize: 13, color: '#333' }}>{entry.fileName} {entry.sizeMb}</span>
+                                      {fromPersonal && (
+                                        <span style={{ fontSize: 10, background: '#f0fff4', color: '#16a34a', borderRadius: 20, padding: '2px 8px', fontWeight: 600 }}>
+                                          From personal step
+                                        </span>
+                                      )}
                                       <button type="button" onClick={(e) => { e.stopPropagation(); removeUpload(uploadKey) }} style={{ border: 'none', background: 'none', color: BRAND, fontSize: 16, cursor: 'pointer', marginLeft: 'auto' }}>×</button>
                                       <button type="button" onClick={(e) => { e.stopPropagation(); fileInputRefs.current[uploadKey]?.click() }} style={{ border: 'none', background: 'none', color: ACCENT, fontSize: 12, cursor: 'pointer' }}>Replace</button>
                                     </div>
+                                  )}
+                                  {!entry && doc.id === 'passport' && (
+                                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#888' }}>
+                                      Upload your passport copy here if you did not upload on the personal step
+                                    </p>
                                   )}
                                 </div>
                               </div>
@@ -2294,9 +2959,34 @@ export default function ApplyPage() {
             {step === 'checkout' && (
               <>
                 <h1 style={{ margin: '32px 0 24px', fontSize: 24, fontWeight: 700, textAlign: 'center' }}>Review and pay</h1>
-                <Elements stripe={stripePromise}>
-                  <CheckoutPaymentForm country={country} selectedOption={selectedOption} travelers={travelers} departureDate={departureDate} returnDate={returnDate} pricing={pricing} />
-                </Elements>
+                {stripeMockCheckout ? (
+                  <CheckoutPaymentForm
+                    country={country}
+                    selectedOption={selectedOption}
+                    travelers={travelers}
+                    departureDate={departureDate}
+                    returnDate={returnDate}
+                    pricing={pricing}
+                    docsComplete={docsComplete}
+                    passportCode={countryCode || country.countryCode}
+                    uploads={uploads}
+                    mockCheckout
+                  />
+                ) : (
+                  <Elements stripe={getStripePromise()}>
+                    <CheckoutPaymentForm
+                      country={country}
+                      selectedOption={selectedOption}
+                      travelers={travelers}
+                      departureDate={departureDate}
+                      returnDate={returnDate}
+                      pricing={pricing}
+                      docsComplete={docsComplete}
+                      passportCode={countryCode || country.countryCode}
+                      uploads={uploads}
+                    />
+                  </Elements>
+                )}
               </>
             )}
           </div>
@@ -2304,7 +2994,14 @@ export default function ApplyPage() {
       </div>
 
       {step === 'personal' && (
-        <FixedBottomBar isMobile={isMobile} left={<SuperVaultLock />} right={<ActionButton enabled={personalComplete} label="Continue →" onClick={handlePersonalContinue} />} />
+        <FixedBottomBar
+          isMobile={isMobile}
+          left={<SuperVaultLock />}
+          center={!personalComplete && personalMissingHint ? (
+            <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500 }}>{personalMissingHint}</span>
+          ) : undefined}
+          right={<ActionButton enabled={personalComplete} label="Continue →" onClick={handlePersonalContinue} />}
+        />
       )}
       {step === 'travel' && (
         <FixedBottomBar isMobile={isMobile} left={<button type="button" onClick={() => goToStep('personal')} style={{ border: 'none', background: 'none', color: '#333', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>← Back</button>} right={<ActionButton enabled={travelComplete} label="Continue →" onClick={handleTravelContinue} />} />

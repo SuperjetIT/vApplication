@@ -4,15 +4,24 @@ import { Navbar } from '../components/Navbar'
 import { SiteFooter } from '../components/SiteFooter'
 import { useAuth } from '../context/AuthContext'
 import { getApplicationForUser, getCountryForApplication } from '../utils/applications'
+import { useDatabaseListener } from '../hooks/useDatabase'
 import './UserMePage.css'
 
 const BRAND = '#f93e42'
+
+function applicationStatusClass(status: string): string {
+  if (status === 'Approved') return 'approved'
+  if (status === 'Rejected') return 'rejected'
+  if (status === 'Payment Pending' || status === 'Docs Pending') return 'pending'
+  return 'progress'
+}
 
 export default function UserApplicationPage() {
   const { applicationId } = useParams<{ applicationId: string }>()
   const navigate = useNavigate()
   const { user, isLoggedIn, avatarInitials, avatarColor } = useAuth()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+  useDatabaseListener()
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768)
@@ -69,9 +78,7 @@ export default function UserApplicationPage() {
                 {application.countryName} Visa
               </h1>
               <span
-                className={`user-me-status user-me-status--${
-                  application.status === 'Approved' ? 'approved' : 'progress'
-                }`}
+                className={`user-me-status user-me-status--${applicationStatusClass(application.status)}`}
               >
                 {application.status}
               </span>
@@ -90,9 +97,21 @@ export default function UserApplicationPage() {
               <dd style={{ margin: 0, fontWeight: 600, color: '#111827' }}>{application.travelers}</dd>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-              <dt style={{ color: '#6b7280', margin: 0 }}>Total paid</dt>
+              <dt style={{ color: '#6b7280', margin: 0 }}>Total</dt>
               <dd style={{ margin: 0, fontWeight: 700, color: BRAND }}>AED {application.totalAed}</dd>
             </div>
+            {application.paymentMethod && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                <dt style={{ color: '#6b7280', margin: 0 }}>Payment</dt>
+                <dd style={{ margin: 0, fontWeight: 600, color: '#111827' }}>{application.paymentMethod}</dd>
+              </div>
+            )}
+            {application.invoiceNo && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                <dt style={{ color: '#6b7280', margin: 0 }}>Invoice</dt>
+                <dd style={{ margin: 0, fontWeight: 600, color: '#111827' }}>{application.invoiceNo}</dd>
+              </div>
+            )}
             {country && (
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                 <dt style={{ color: '#6b7280', margin: 0 }}>Processing time</dt>
@@ -101,14 +120,34 @@ export default function UserApplicationPage() {
             )}
           </dl>
 
+          <div style={{ marginTop: 24, padding: 16, background: '#f8f9fc', borderRadius: 12, fontSize: 13, color: '#4b5563', lineHeight: 1.6 }}>
+            <strong style={{ color: '#111827' }}>What happens next?</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+              {application.status === 'Payment Pending' && (
+                <li>Complete your bank transfer using the invoice details. Our team will confirm payment and begin review.</li>
+              )}
+              {application.status === 'Docs Pending' && (
+                <li>Please upload any missing documents. Our operations team will notify you if anything else is needed.</li>
+              )}
+              {(application.status === 'In Progress' || application.status === 'Submitted') && (
+                <li>Our operations team is processing your application with the embassy.</li>
+              )}
+              {application.status === 'Approved' && (
+                <li>Congratulations — your visa has been approved. Check your email for collection or delivery details.</li>
+              )}
+              {application.status === 'Rejected' && (
+                <li>Your application was not approved. Contact support for refund options under Super Protect.</li>
+              )}
+            </ul>
+          </div>
+
           <p style={{ margin: '24px 0 0', fontSize: 14, color: '#6b7280', lineHeight: 1.6 }}>
-            This application belongs to your account ({user.email}). Track updates here or contact
-            support if you need help.
+            Signed in as {user.email}. Status updates from our operations team appear here automatically.
           </p>
 
           <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            <button type="button" className="user-me-btn" onClick={() => navigate('/user/me')}>
-              My account
+            <button type="button" className="user-me-btn" onClick={() => navigate('/user/me', { state: { section: 'applications' } })}>
+              My applications
             </button>
             <Link to={`/visa/${application.countrySlug}`} className="user-me-btn user-me-btn--outline">
               View country requirements

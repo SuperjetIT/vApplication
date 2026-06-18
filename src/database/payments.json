@@ -1,0 +1,15 @@
+{
+  "payments": [
+    {
+      "id": "pay_001",
+      "txnId": "TXN84729103",
+      "invoiceId": "inv_001",
+      "applicationId": "app_001",
+      "amount": 786.45,
+      "method": "card",
+      "gateway": "stripe",
+      "status": "success",
+      "createdAt": "2026-06-12T10:01:00Z"
+    }
+  ]
+}

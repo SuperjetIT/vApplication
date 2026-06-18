@@ -6,8 +6,8 @@ import { useAuth } from '../context/AuthContext'
 import {
   getApplicationsForUser,
   getCountryForApplication,
-  type UserApplication,
 } from '../utils/applications'
+import { useDatabaseListener } from '../hooks/useDatabase'
 import './UserMePage.css'
 
 const BRAND = '#f93e42'
@@ -116,8 +116,9 @@ export default function UserMePage() {
   const [name, setName] = useState(user?.fullName ?? displayName)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-  const [applications, setApplications] = useState<UserApplication[]>([])
   const isLoggingOutRef = useRef(false)
+  useDatabaseListener()
+  const applications = user?.email ? getApplicationsForUser(user.email) : []
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768)
@@ -135,14 +136,6 @@ export default function UserMePage() {
       setSection(fromState)
     }
   }, [location.state])
-
-  useEffect(() => {
-    if (user?.email) {
-      setApplications(getApplicationsForUser(user.email))
-    } else {
-      setApplications([])
-    }
-  }, [user?.email, section])
 
   if (!isLoggedIn || !user) {
     if (isLoggingOutRef.current) {
@@ -292,7 +285,13 @@ export default function UserMePage() {
                           </div>
                           <span
                             className={`user-me-status user-me-status--${
-                              app.status === 'Approved' ? 'approved' : 'progress'
+                              app.status === 'Approved'
+                                ? 'approved'
+                                : app.status === 'Rejected'
+                                  ? 'rejected'
+                                  : app.status === 'Payment Pending' || app.status === 'Docs Pending'
+                                    ? 'pending'
+                                    : 'progress'
                             }`}
                           >
                             {app.status}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useDatabaseListener } from '../../hooks/useDatabase'
 import { AdminLayout } from '../../components/AdminLayout'
 import { AdminAvatar } from '../../components/admin/AdminAvatar'
 import { AdminCredentialRow } from '../../components/admin/AdminCredentialRow'
@@ -8,7 +9,8 @@ import { AdminEmptyState } from '../../components/admin/AdminEmptyState'
 import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BRAND_BLUE, BORDER, PAGE_BG, cardStyle, inputStyle, outlineBtn, primaryBtn, selectStyle, SUCCESS, tableHeaderStyle, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
 import { usePortalBase } from '../../hooks/usePortalBase'
-import { MOCK_CUSTOMERS, type AdminCustomer } from '../../data/adminMockData'
+import type { AdminCustomer } from '../../data/adminMockData'
+import { Database } from '../../database/db'
 
 function randomB2CPassword(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$'
@@ -27,18 +29,61 @@ const viewBtnStyle = {
   cursor: 'pointer' as const,
 }
 
+function parseCustomerTime(value: string): number {
+  if (!value || value === '—') return 0
+  const t = Date.parse(value)
+  return Number.isNaN(t) ? 0 : t
+}
+
+function buildCustomersFromDb(): AdminCustomer[] {
+    const users = Database.getUsers()
+    const apps = Database.getApplications({ type: 'b2c' })
+    const mapped = users.map((u, i) => {
+      const userId = String(u.id)
+      const myApps = apps.filter((a) => String(a.userId) === userId)
+      const totalSpent = myApps.reduce((sum, a) => {
+        const amount = a.amount as { total?: number } | undefined
+        return sum + Number(amount?.total ?? 0)
+      }, 0)
+      const username =
+        String(u.email ?? '')
+          .split('@')[0]
+          .replace(/[^a-z0-9]/gi, '')
+          .toLowerCase() || `user${i + 1}`
+      return {
+        id: userId,
+        name: String(u.fullName ?? username),
+        email: String(u.email ?? ''),
+        username,
+        password: 'Passwordless OTP',
+        phone: String(u.phone ?? '—'),
+        nationality: String(u.passportCountry ?? '—'),
+        applications: myApps.length,
+        totalSpent,
+        lastActive: String(u.lastLogin ?? u.createdAt ?? '—').slice(0, 10),
+        profileImage: undefined,
+      } satisfies AdminCustomer
+    })
+  return mergeProfileImages(mapped, 'b2c')
+}
+
 export default function AdminCustomers() {
   const { isOperations } = usePortalBase()
-  const [customers, setCustomers] = useState<AdminCustomer[]>(() => mergeProfileImages(MOCK_CUSTOMERS, 'b2c'))
+  useDatabaseListener()
+  const [passwordOverrides, setPasswordOverrides] = useState<Record<string, string>>({})
+  const customers = buildCustomersFromDb().map((c) =>
+    passwordOverrides[c.id] ? { ...c, password: passwordOverrides[c.id] } : c,
+  )
   const [search, setSearch] = useState('')
   const [nationalityFilter, setNationalityFilter] = useState('all')
+  const [timeSort, setTimeSort] = useState<'desc' | 'asc'>('desc')
   const [profileUser, setProfileUser] = useState<AdminCustomer | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   const nationalities = useMemo(() => [...new Set(customers.map((c) => c.nationality))], [customers])
 
   const filtered = useMemo(() => {
-    return customers.filter((c) => {
+    const list = customers.filter((c) => {
       const matchSearch = !search
         || c.name.toLowerCase().includes(search.toLowerCase())
         || c.email.toLowerCase().includes(search.toLowerCase())
@@ -46,21 +91,30 @@ export default function AdminCustomers() {
       const matchNat = nationalityFilter === 'all' || c.nationality === nationalityFilter
       return matchSearch && matchNat
     })
-  }, [customers, search, nationalityFilter])
+    return [...list].sort((a, b) => {
+      const diff = parseCustomerTime(a.lastActive) - parseCustomerTime(b.lastActive)
+      return timeSort === 'asc' ? diff : -diff
+    })
+  }, [customers, search, nationalityFilter, timeSort])
 
   const totalSpent = customers.reduce((s, c) => s + c.totalSpent, 0)
-  const hasFilters = Boolean(search || nationalityFilter !== 'all')
+  const hasFilters = Boolean(search || nationalityFilter !== 'all' || timeSort !== 'desc')
+
+  const clearFilters = () => {
+    setSearch('')
+    setNationalityFilter('all')
+    setTimeSort('desc')
+  }
 
   const updateProfileImage = (id: string, dataUrl: string | undefined) => {
     setProfileImage('b2c', id, dataUrl)
-    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, profileImage: dataUrl } : c)))
     setProfileUser((p) => (p?.id === id ? { ...p, profileImage: dataUrl } : p))
     setToast(dataUrl ? 'Profile picture updated' : 'Profile picture removed')
   }
 
   const resetPassword = (id: string) => {
     const pwd = randomB2CPassword()
-    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, password: pwd } : c)))
+    setPasswordOverrides((prev) => ({ ...prev, [id]: pwd }))
     setProfileUser((p) => (p?.id === id ? { ...p, password: pwd } : p))
     setToast('B2C user password reset')
   }
@@ -89,12 +143,16 @@ export default function AdminCustomers() {
           <option value="all">All Nationalities</option>
           {nationalities.map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
-        {hasFilters && <button type="button" onClick={() => { setSearch(''); setNationalityFilter('all') }} style={{ border: 'none', background: 'none', color: BRAND, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Clear filters</button>}
+        <select value={timeSort} onChange={(e) => setTimeSort(e.target.value as 'desc' | 'asc')} style={{ ...selectStyle, minWidth: 180 }} aria-label="Sort by last active time">
+          <option value="desc">Time: Newest first</option>
+          <option value="asc">Time: Oldest first</option>
+        </select>
+        {hasFilters && <button type="button" onClick={clearFilters} style={{ border: 'none', background: 'none', color: BRAND, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Clear filters</button>}
       </div>
 
       <div className="admin-table-wrap" style={{ ...cardStyle, padding: 0 }}>
         {filtered.length === 0 ? (
-          <AdminEmptyState title="No B2C users found" onClearFilters={hasFilters ? () => { setSearch(''); setNationalityFilter('all') } : undefined} />
+          <AdminEmptyState title="No B2C users found" onClearFilters={hasFilters ? clearFilters : undefined} />
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>

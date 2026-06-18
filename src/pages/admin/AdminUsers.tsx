@@ -4,6 +4,12 @@ import { AdminAvatar } from '../../components/admin/AdminAvatar'
 import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BRAND_BLUE, BORDER, cardStyle, hoverCardProps, inputStyle, outlineBtn, PAGE_BG, primaryBtn, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
 import { MOCK_USERS, type AdminUser } from '../../data/adminMockData'
+import {
+  loadOperationUsers,
+  saveOperationUsers,
+  updateOperationUserPassword,
+  type OperationStaffUser,
+} from '../../utils/operationsAuth'
 
 function randomPassword(len = 12): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$'
@@ -16,7 +22,11 @@ function randomUsername(name: string): string {
 }
 
 export default function AdminUsers() {
-  const [users, setUsers] = useState<AdminUser[]>(MOCK_USERS)
+  const [users, setUsers] = useState<OperationStaffUser[]>(() => {
+    const stored = loadOperationUsers()
+    const admin = MOCK_USERS.find((u) => u.email === 'admin@superjetglobal.com')
+    return admin ? [admin as OperationStaffUser, ...stored] : stored
+  })
   const [showCreate, setShowCreate] = useState(false)
   const [showReset, setShowReset] = useState<AdminUser | null>(null)
   const [created, setCreated] = useState<{ username: string; password: string } | null>(null)
@@ -26,8 +36,20 @@ export default function AdminUsers() {
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
   const [toast, setToast] = useState<string | null>(null)
 
+  const persistOpsUsers = (next: OperationStaffUser[]) => {
+    saveOperationUsers(next.filter((u) => u.email !== 'admin@superjetglobal.com'))
+  }
+
   const toggleStatus = (id: string) => {
-    setUsers((u) => u.map((user) => user.id === id ? { ...user, status: user.status === 'Active' ? 'Inactive' : 'Active' } : user))
+    setUsers((u) => {
+      const next = u.map((user) => {
+        if (user.id !== id) return user
+        const status: AdminUser['status'] = user.status === 'Active' ? 'Inactive' : 'Active'
+        return { ...user, status }
+      })
+      persistOpsUsers(next.filter((x) => x.email !== 'admin@superjetglobal.com'))
+      return next
+    })
     setToast('User status updated')
   }
 
@@ -35,8 +57,24 @@ export default function AdminUsers() {
     if (!form.name || !form.email) return
     const username = randomUsername(form.name)
     const password = randomPassword()
+    const newUser: OperationStaffUser = {
+      id: String(Date.now()),
+      name: form.name,
+      email: form.email,
+      username,
+      password,
+      role: 'Operations',
+      status: 'Active',
+      created: new Date().toISOString().slice(0, 10),
+      lastLogin: '—',
+    }
     setCreated({ username, password })
-    setUsers((u) => [...u, { id: String(u.length + 1), name: form.name, email: form.email, username, role: 'Operations', status: 'Active', created: new Date().toISOString().slice(0, 10), lastLogin: '—' }])
+    setUsers((u) => {
+      const admin = u.find((x) => x.email === 'admin@superjetglobal.com')
+      const nextOps = [newUser, ...u.filter((x) => x.email !== 'admin@superjetglobal.com')]
+      persistOpsUsers(nextOps)
+      return admin ? [admin, ...nextOps] : nextOps
+    })
   }
 
   return (
@@ -183,7 +221,12 @@ export default function AdminUsers() {
               <button type="button" onClick={() => setShowResetPwd((s) => !s)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: TEXT_SECONDARY, cursor: 'pointer' }}>{showResetPwd ? '🙈' : '👁'}</button>
             </div>
             {resetPwd && <button type="button" onClick={() => navigator.clipboard.writeText(resetPwd)} style={{ ...outlineBtn, width: '100%', marginBottom: 12 }}>Copy Password</button>}
-            <button type="button" onClick={() => { setShowReset(null); setToast('Password reset successfully') }} style={{ ...primaryBtn, width: '100%' }}>Confirm Reset</button>
+            <button type="button" onClick={() => {
+              if (!resetPwd.trim() || !showReset) return
+              updateOperationUserPassword(showReset.id, resetPwd.trim())
+              setShowReset(null)
+              setToast('Password reset successfully')
+            }} style={{ ...primaryBtn, width: '100%' }}>Confirm Reset</button>
           </div>
         </>
       )}

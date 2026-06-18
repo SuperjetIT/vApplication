@@ -1,0 +1,21 @@
+{
+  "partners": [
+    {
+      "id": "ptn_001",
+      "companyName": "Al Faris Travel Agency",
+      "contactPerson": "Mohammed Al Faris",
+      "email": "mohammed@alfaris.ae",
+      "password": "Partner@123",
+      "phone": "+971501112233",
+      "walletBalance": 2400,
+      "tradeLicence": "TL-2024-8821",
+      "countriesSold": ["UK", "Schengen", "USA"],
+      "commissionRate": 15,
+      "status": "active",
+      "createdAt": "2026-05-15T09:00:00Z",
+      "totalApplications": 24,
+      "totalRevenue": 13800,
+      "totalCommission": 2070
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "operators": [
+    {
+      "id": "op_001",
+      "fullName": "Fatima Al Zahra",
+      "username": "fatima021",
+      "password": "TempPass123!",
+      "email": "fatima@superjetglobal.com",
+      "role": "operations",
+      "status": "active",
+      "createdAt": "2026-05-01T09:00:00Z",
+      "createdBy": "admin",
+      "casesHandled": 142,
+      "lastLogin": "2026-06-15T09:00:00Z"
+    }
+  ]
+}

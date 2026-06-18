@@ -2,7 +2,18 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
 import nodemailer from 'nodemailer'
+import { createRequire } from 'module'
 import { getUserByEmail, upsertUser } from './users.mjs'
+import {
+  getActiveEmailProvider,
+  getResolvedSmtpConfig,
+  loadEmailSettings,
+  saveEmailSettings,
+  toAdminPayload,
+} from './emailSettings.mjs'
+
+const require = createRequire(import.meta.url)
+const PassportOcrApi = require('passport-ocr-api').default
 
 dotenv.config()
 
@@ -21,6 +32,21 @@ function isValidEmail(email) {
 }
 
 const CONTACT_TO = process.env.CONTACT_TO || 'procurement@superjetgroup.com'
+const DEFAULT_FROM_NAME = 'Superjet Visa'
+const DEFAULT_FROM_EMAIL = 'no-reply@superjetglobal.com'
+const DEFAULT_REPLY_TO = 'inquiry@superjetgroup.com'
+
+/** Customer-facing From — hides the real SMTP login address. */
+function getMailFrom() {
+  const smtp = getResolvedSmtpConfig()
+  const name = smtp.fromName.replace(/"/g, '').trim() || DEFAULT_FROM_NAME
+  const address = smtp.fromEmail.trim().toLowerCase() || DEFAULT_FROM_EMAIL
+  return `"${name}" <${address}>`
+}
+
+function getMailReplyTo() {
+  return getResolvedSmtpConfig().replyTo.trim() || DEFAULT_REPLY_TO
+}
 
 function buildContactEmailHtml({ fullName, email, phone, subject, message }) {
   const safe = (s) =>
@@ -139,33 +165,94 @@ function buildOtpEmailHtml(code) {
 
 const app = express()
 app.use(cors({ origin: true }))
-app.use(express.json())
+app.use(express.json({ limit: '20mb' }))
 
 let transporter = null
+let transporterKey = ''
 
 function getTransporter() {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  const smtp = getResolvedSmtpConfig()
+  if (!smtp.enabled || !smtp.user || !smtp.pass) {
     return null
   }
-  if (!transporter) {
+  const key = `${smtp.host}:${smtp.port}:${smtp.user}:${smtp.pass.slice(0, 4)}`
+  if (!transporter || transporterKey !== key) {
     transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(process.env.SMTP_PORT) || 587,
+      host: smtp.host,
+      port: smtp.port,
       secure: false,
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS.replace(/\s/g, ''),
+        user: smtp.user,
+        pass: smtp.pass,
       },
     })
+    transporterKey = key
   }
   return transporter
 }
 
 app.get('/api/health', (_req, res) => {
+  const smtp = getResolvedSmtpConfig()
   res.json({
     ok: true,
-    smtpConfigured: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
+    smtpConfigured: Boolean(smtp.user && smtp.pass),
+    activeEmailProvider: getActiveEmailProvider(),
   })
+})
+
+app.get('/api/admin/email/settings', (_req, res) => {
+  const settings = loadEmailSettings()
+  return res.json(toAdminPayload(settings))
+})
+
+app.put('/api/admin/email/settings', (req, res) => {
+  try {
+    const body = req.body ?? {}
+    const saved = saveEmailSettings({
+      smtp: body.smtp,
+      resend: body.resend,
+      sendgrid: body.sendgrid,
+    })
+    transporter = null
+    transporterKey = ''
+    return res.json(toAdminPayload(saved))
+  } catch (err) {
+    console.error('[admin/email/settings]', err)
+    return res.status(500).json({ ok: false, error: 'Could not save email settings' })
+  }
+})
+
+app.post('/api/admin/email/test', async (req, res) => {
+  const to = String(req.body?.to ?? '').trim().toLowerCase()
+  const provider = String(req.body?.provider ?? 'smtp')
+
+  if (!isValidEmail(to)) {
+    return res.status(400).json({ ok: false, error: 'Enter a valid test email address' })
+  }
+
+  if (provider !== 'smtp') {
+    return res.status(501).json({ ok: false, error: `${provider} test send is not implemented yet. Use SMTP for OTP emails.` })
+  }
+
+  const mailer = getTransporter()
+  if (!mailer) {
+    return res.status(503).json({ ok: false, error: 'SMTP is not configured. Add host, user and password, then save.' })
+  }
+
+  try {
+    await mailer.sendMail({
+      from: getMailFrom(),
+      replyTo: getMailReplyTo(),
+      to,
+      subject: 'Superjet Visa — test email',
+      text: 'This is a test email from Admin → Settings → Email. SMTP is working.',
+      html: `<p>This is a test email from <strong>Admin → Settings → Email</strong>.</p><p>SMTP is working.</p>`,
+    })
+    return res.json({ ok: true })
+  } catch (err) {
+    console.error('[admin/email/test]', err)
+    return res.status(500).json({ ok: false, error: err instanceof Error ? err.message : 'Test email failed' })
+  }
 })
 
 app.post('/api/contact', async (req, res) => {
@@ -198,7 +285,7 @@ app.post('/api/contact', async (req, res) => {
     })
   }
 
-  const from = process.env.SMTP_FROM || `"Superjet Global" <${process.env.SMTP_USER}>`
+  const from = getMailFrom()
   const mailSubject = `[Superjet Global Contact] ${subject}`
 
   try {
@@ -226,8 +313,6 @@ app.post('/api/contact', async (req, res) => {
       error: 'Could not send your message. Please try WhatsApp or call us directly.',
     })
   }
-})
-
 })
 
 app.post('/api/visa-checker', async (req, res) => {
@@ -279,7 +364,7 @@ app.post('/api/visa-checker', async (req, res) => {
     previousRejection,
   }
 
-  const from = process.env.SMTP_FROM || `"Superjet Global" <${process.env.SMTP_USER}>`
+  const from = getMailFrom()
 
   try {
     await mailer.sendMail({
@@ -323,11 +408,12 @@ app.post('/api/auth/send-otp', async (req, res) => {
   const expires = Date.now() + OTP_TTL_MS
   otpStore.set(email, { code, expires })
 
-  const from = process.env.SMTP_FROM || `"Superjet Global" <${process.env.SMTP_USER}>`
+  const from = getMailFrom()
 
   try {
     await mailer.sendMail({
       from,
+      replyTo: getMailReplyTo(),
       to: email,
       subject: `${code} is your Superjet Global sign-in code`,
       text: `Your Superjet Global verification code is ${code}. It expires in 10 minutes. If you didn't request this, ignore this email.`,
@@ -398,6 +484,121 @@ app.patch('/api/user/me', (req, res) => {
 
   const user = upsertUser(email, fullName)
   return res.json(user)
+})
+
+const ML_OCR_URL = process.env.ML_OCR_URL || 'http://127.0.0.1:3002'
+
+async function proxyMlOcr(path, options = {}) {
+  const url = `${ML_OCR_URL.replace(/\/$/, '')}${path}`
+  const res = await fetch(url, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+  })
+  const data = await res.json().catch(() => ({}))
+  return { status: res.status, data }
+}
+
+app.get('/api/ocr/ml-health', async (_req, res) => {
+  try {
+    const { status, data } = await proxyMlOcr('/health')
+    return res.status(status).json(data)
+  } catch (err) {
+    return res.status(503).json({
+      ok: false,
+      error:
+        'ML OCR service is not running. Install deps (pip install -r server/requirements-ocr.txt) and run: python server/ocr_server.py',
+      detail: err instanceof Error ? err.message : String(err),
+    })
+  }
+})
+
+app.post('/api/ocr/ml-scan', async (req, res) => {
+  const imageBase64 = String(req.body?.imageBase64 ?? '')
+  if (!imageBase64) {
+    return res.status(400).json({ ok: false, error: 'imageBase64 is required' })
+  }
+  try {
+    const { status, data } = await proxyMlOcr('/scan', {
+      method: 'POST',
+      body: JSON.stringify({ imageBase64 }),
+    })
+    return res.status(status).json(data)
+  } catch (err) {
+    return res.status(503).json({
+      ok: false,
+      error: 'ML OCR service unavailable. Start python server/ocr_server.py',
+      detail: err instanceof Error ? err.message : String(err),
+    })
+  }
+})
+
+function parseImageBase64(imageBase64, mimeType = 'image/jpeg') {
+  let raw = String(imageBase64).trim()
+  let mime = mimeType
+  if (raw.startsWith('data:')) {
+    const match = raw.match(/^data:([^;]+);base64,(.+)$/s)
+    if (match) {
+      mime = match[1]
+      raw = match[2]
+    }
+  }
+  return { buffer: Buffer.from(raw, 'base64'), mime, dataUrl: `data:${mime};base64,${raw}` }
+}
+
+async function uploadTemporaryPublicUrl(buffer, fileName, mimeType) {
+  const form = new FormData()
+  form.append('reqtype', 'fileupload')
+  form.append('time', '1h')
+  form.append('fileToUpload', new Blob([buffer], { type: mimeType }), fileName)
+  const uploadRes = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+    method: 'POST',
+    body: form,
+  })
+  const url = (await uploadRes.text()).trim()
+  if (!uploadRes.ok || !url.startsWith('http')) {
+    throw new Error(
+      url && !url.startsWith('http')
+        ? `Temporary file upload failed: ${url.slice(0, 120)}`
+        : `Temporary file upload failed (${uploadRes.status})`,
+    )
+  }
+  return url
+}
+
+app.post('/api/ocr/passport-api', async (req, res) => {
+  const apiKey = String(process.env.PASSPORT_OCR_API_KEY ?? req.body?.apiKey ?? '').trim()
+  const imageBase64 = String(req.body?.imageBase64 ?? '').trim()
+  const fileName = String(req.body?.fileName ?? 'passport.jpg')
+  const mimeType = String(req.body?.mimeType ?? 'image/jpeg')
+
+  if (!apiKey) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Passport OCR API key missing. Add it in Admin → Settings → OCR or set PASSPORT_OCR_API_KEY in .env',
+    })
+  }
+  if (!imageBase64) {
+    return res.status(400).json({ ok: false, error: 'imageBase64 is required' })
+  }
+
+  const api = new PassportOcrApi({ apiKey, createResponseFiles: false })
+  const { buffer, mime } = parseImageBase64(imageBase64, mimeType)
+
+  try {
+    // omkar.cloud only accepts publicly fetchable HTTP(S) URLs — not data: URLs.
+    const publicUrl = await uploadTemporaryPublicUrl(buffer, fileName, mime)
+    const data = await api.extractPassportData(publicUrl)
+    return res.json({ ok: true, data })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const response = err && typeof err === 'object' && 'response' in err ? err.response : null
+    console.error('[passport-ocr-api]', message, response)
+    return res.status(502).json({
+      ok: false,
+      error: message || 'Passport OCR API failed',
+      detail: response?.data ?? null,
+    })
+  }
 })
 
 app.listen(PORT, () => {

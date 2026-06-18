@@ -1,0 +1,13 @@
+{
+  "activities": [
+    {
+      "id": "act_001",
+      "type": "application_created",
+      "description": "New application — Ahmed Hassan — UK Visa",
+      "applicationId": "app_001",
+      "actor": "usr_001",
+      "actorType": "customer",
+      "timestamp": "2026-06-12T10:00:00Z"
+    }
+  ]
+}
