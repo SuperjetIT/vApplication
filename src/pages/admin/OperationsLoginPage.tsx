@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { OPERATIONS_BASE_PATH } from '../../config/portalRoutes'
-import { BRAND, BORDER, DANGER, inputStyle, TEXT_MUTED, TEXT_PRIMARY } from '../../components/admin/adminTheme'
+import { BORDER, DANGER, OPS_PRIMARY, OPS_SECONDARY, inputStyle, TEXT_MUTED, TEXT_PRIMARY } from '../../components/admin/adminTheme'
 import { setPortalSession } from '../../utils/portalAuth'
 import {
   clearLoginAttempts,
@@ -74,16 +74,16 @@ export default function OperationsLoginPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8f9fc 0%, #f0f4ff 50%, #fff5f5 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative', overflow: 'hidden' }}>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #fff7ed 0%, #fff1f2 50%, #f8fafc 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative', overflow: 'hidden' }}>
       <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`}</style>
-      <div aria-hidden style={{ position: 'absolute', width: 400, height: 400, top: -100, left: -100, borderRadius: '50%', background: 'rgba(80,87,234,0.06)', filter: 'blur(60px)' }} />
-      <div aria-hidden style={{ position: 'absolute', width: 300, height: 300, bottom: -50, right: -50, borderRadius: '50%', background: 'rgba(249,62,66,0.05)', filter: 'blur(60px)' }} />
+      <div aria-hidden style={{ position: 'absolute', width: 400, height: 400, top: -100, left: -100, borderRadius: '50%', background: 'rgba(249,115,22,0.09)', filter: 'blur(60px)' }} />
+      <div aria-hidden style={{ position: 'absolute', width: 300, height: 300, bottom: -50, right: -50, borderRadius: '50%', background: 'rgba(225,29,72,0.07)', filter: 'blur(60px)' }} />
 
       <div style={{ position: 'relative', zIndex: 1, background: '#fff', borderRadius: 28, maxWidth: 420, width: '100%', boxShadow: '0 24px 64px rgba(0,0,0,0.08)', border: `1px solid ${BORDER}`, overflow: 'hidden', animation: shake ? 'shake 0.5s' : 'none' }}>
-        <div style={{ height: 4, background: `linear-gradient(90deg, ${BRAND}, #5057ea)` }} />
+        <div style={{ height: 4, background: `linear-gradient(90deg, ${OPS_PRIMARY}, ${OPS_SECONDARY})` }} />
         <div style={{ padding: '36px 32px' }}>
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'linear-gradient(135deg, #5057ea, #818cf8)', boxShadow: '0 4px 12px rgba(80,87,234,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 16, margin: '0 auto 12px' }}>SG</div>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: `linear-gradient(135deg, ${OPS_PRIMARY}, ${OPS_SECONDARY})`, boxShadow: '0 4px 12px rgba(249,115,22,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 16, margin: '0 auto 12px' }}>SG</div>
             <div style={{ fontWeight: 800, fontSize: 20, color: TEXT_PRIMARY }}>Superjet Global</div>
             <p style={{ margin: '4px 0 0', color: TEXT_MUTED, fontSize: 14 }}>Operations Portal</p>
           </div>
@@ -98,21 +98,24 @@ export default function OperationsLoginPage() {
             <label style={{ display: 'block', fontSize: 13, color: TEXT_MUTED, marginBottom: 6, fontWeight: 500 }}>Email or Username</label>
             <div style={{ position: 'relative', marginBottom: 16 }}>
               <svg style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TEXT_MUTED} strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
-              <input type="text" value={email} onChange={(e) => { setEmail(e.target.value); setError('') }} disabled={locked} autoComplete="username" style={{ ...inputStyle, width: '100%', paddingLeft: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} placeholder="Enter email or username" />
+              <input type="text" value={email} onChange={(e) => { setEmail(e.target.value); setError('') }} disabled={locked} autoComplete="username" style={{ ...inputStyle, width: '100%', paddingLeft: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} placeholder="Enter your email or username" />
             </div>
             <label style={{ display: 'block', fontSize: 13, color: TEXT_MUTED, marginBottom: 6, fontWeight: 500 }}>Password</label>
             <div style={{ position: 'relative' }}>
               <svg style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TEXT_MUTED} strokeWidth="1.8"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
-              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => { setPassword(e.target.value); setError('') }} disabled={locked} autoComplete="current-password" style={{ ...inputStyle, width: '100%', paddingLeft: 44, paddingRight: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} />
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => { setPassword(e.target.value); setError('') }} disabled={locked} autoComplete="current-password" placeholder="Enter your password" style={{ ...inputStyle, width: '100%', paddingLeft: 44, paddingRight: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} />
               <button type="button" onClick={() => setShowPassword((s) => !s)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: TEXT_MUTED }}>{showPassword ? '🙈' : '👁'}</button>
             </div>
             {error && <p style={{ margin: '8px 0 0', color: DANGER, fontSize: 13 }}>{error}</p>}
             {!locked && !error && attemptsLeft < 5 && (
               <p style={{ margin: '8px 0 0', color: TEXT_MUTED, fontSize: 12 }}>{attemptsLeft} attempt{attemptsLeft === 1 ? '' : 's'} remaining before lockout</p>
             )}
-            <button type="submit" disabled={locked} style={{ width: '100%', background: locked ? '#e8ecf0' : 'linear-gradient(135deg, #5057ea, #818cf8)', color: locked ? TEXT_MUTED : '#fff', border: 'none', borderRadius: 12, padding: 14, fontWeight: 700, fontSize: 14, marginTop: 20, cursor: locked ? 'not-allowed' : 'pointer', boxShadow: locked ? 'none' : '0 8px 24px rgba(80,87,234,0.35)' }}>Sign In</button>
+            <button type="submit" disabled={locked} style={{ width: '100%', background: locked ? '#e8ecf0' : `linear-gradient(135deg, ${OPS_PRIMARY}, ${OPS_SECONDARY})`, color: locked ? TEXT_MUTED : '#fff', border: 'none', borderRadius: 12, padding: 14, fontWeight: 700, fontSize: 14, marginTop: 20, cursor: locked ? 'not-allowed' : 'pointer', boxShadow: locked ? 'none' : '0 8px 24px rgba(249,115,22,0.35)' }}>Sign In</button>
           </form>
-          <p style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center', marginTop: 24, marginBottom: 0 }}>🔒 Secure operations access</p>
+          <p style={{ color: TEXT_MUTED, fontSize: 13, textAlign: 'center', marginTop: 16, marginBottom: 0, lineHeight: 1.6, fontStyle: 'italic' }}>
+            &ldquo;You&apos;re doing great — every application you handle helps someone&apos;s journey begin.&rdquo;
+          </p>
+          <p style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center', marginTop: 12, marginBottom: 0 }}>🔒 Secure operations access</p>
         </div>
       </div>
     </div>

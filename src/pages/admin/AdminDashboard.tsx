@@ -116,6 +116,15 @@ export default function AdminDashboard() {
     { ...STAT_CARDS[3], value: String(stats.activeApplications) },
     { ...STAT_CARDS[4], value: String(stats.approvedApplications) },
     { ...STAT_CARDS[5], value: String(Database.getPartners().length) },
+    {
+      label: 'Total Wallet Credit',
+      value: `AED ${Math.round(stats.totalWalletBalance).toLocaleString()}`,
+      change: 'Outstanding credit to users',
+      up: true,
+      iconBg: 'linear-gradient(135deg,#fff8e1,#ffedd5)',
+      iconColor: '#f97316',
+      spark: 'M0,16 10,14 20,12 30,10 40,8 50,6 60,4',
+    },
   ]
 
   return (
@@ -135,7 +144,7 @@ export default function AdminDashboard() {
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#fff' }}>{greeting}, {adminName} 👋</h2>
             <p style={{ margin: '6px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Here's what's happening with Superjet Global today</p>
             <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
-              {[`📋 ${stats.activeApplications} Active Applications`, `💰 AED ${Math.round(stats.totalRevenue).toLocaleString()} Revenue`, `✅ ${stats.approvedApplications} Approved`, `⚠ AED ${overdue.amount.toLocaleString()} Overdue`].map((p) => (
+              {[`📋 ${stats.activeApplications} Active Applications`, `💰 AED ${Math.round(stats.totalRevenue).toLocaleString()} Revenue`, `✅ ${stats.approvedApplications} Approved`, `🏢 B2B: ${stats.b2bApplications}`, `👤 B2C: ${stats.b2cApplications}`, `⚠ AED ${overdue.amount.toLocaleString()} Overdue`].map((p) => (
                 <span key={p} style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', borderRadius: 40, padding: '8px 16px', color: '#fff', fontSize: 13, fontWeight: 500 }}>{p}</span>
               ))}
             </div>

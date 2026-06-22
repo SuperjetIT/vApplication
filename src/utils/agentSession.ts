@@ -28,8 +28,7 @@ export function clearAgentSession() {
 }
 
 export function getPartnerWalletBalance(partnerId: string): number {
-  const partner = Database.getPartnerById(partnerId)
-  return Number(partner?.walletBalance ?? 2400)
+  return Database.getPartnerWalletBalance(partnerId)
 }
 
 export function parseFeeAed(fee: string): number {

@@ -10,6 +10,7 @@ import {
   updateOperationUserPassword,
   type OperationStaffUser,
 } from '../../utils/operationsAuth'
+import { isSuperAdminUser, updateSuperAdminPassword } from '../../utils/adminAuth'
 
 function randomPassword(len = 12): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$'
@@ -42,15 +43,20 @@ export default function AdminUsers() {
 
   const toggleStatus = (id: string) => {
     setUsers((u) => {
+      const target = u.find((user) => user.id === id)
+      if (target && isSuperAdminUser(target)) {
+        setToast('Super Admin account cannot be deactivated')
+        return u
+      }
       const next = u.map((user) => {
         if (user.id !== id) return user
         const status: AdminUser['status'] = user.status === 'Active' ? 'Inactive' : 'Active'
         return { ...user, status }
       })
-      persistOpsUsers(next.filter((x) => x.email !== 'admin@superjetglobal.com'))
+      persistOpsUsers(next.filter((x) => !isSuperAdminUser(x)))
+      setToast('User status updated')
       return next
     })
-    setToast('User status updated')
   }
 
   const handleCreate = () => {
@@ -109,7 +115,7 @@ export default function AdminUsers() {
                     <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2 }}>{u.role}</div>
                   </div>
                 </div>
-                <button type="button" onClick={() => toggleStatus(u.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
+                <button type="button" onClick={() => toggleStatus(u.id)} style={{ border: 'none', background: 'none', cursor: isSuperAdminUser(u) ? 'default' : 'pointer', padding: 0 }} disabled={isSuperAdminUser(u)}>
                   <span style={{
                     padding: '4px 10px',
                     borderRadius: 20,
@@ -142,7 +148,7 @@ export default function AdminUsers() {
               <div style={{ display: 'flex', gap: 8, borderTop: `1px solid ${BORDER}`, paddingTop: 16 }}>
                 <button type="button" style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#fff', color: BRAND, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Edit</button>
                 <button type="button" onClick={() => { setShowReset(u); setResetPwd(''); setShowResetPwd(false) }} style={{ flex: 1, border: `1px solid ${BORDER}`, background: '#fff', color: TEXT_SECONDARY, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Reset</button>
-                <button type="button" onClick={() => toggleStatus(u.id)} style={{ flex: 1, border: `1px solid #fecaca`, background: '#fff5f5', color: '#ef4444', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                <button type="button" onClick={() => toggleStatus(u.id)} disabled={isSuperAdminUser(u)} style={{ flex: 1, border: `1px solid #fecaca`, background: '#fff5f5', color: '#ef4444', borderRadius: 8, padding: '8px 12px', cursor: isSuperAdminUser(u) ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, opacity: isSuperAdminUser(u) ? 0.5 : 1 }}>
                   {u.status === 'Active' ? 'Deactivate' : 'Activate'}
                 </button>
               </div>
@@ -223,7 +229,11 @@ export default function AdminUsers() {
             {resetPwd && <button type="button" onClick={() => navigator.clipboard.writeText(resetPwd)} style={{ ...outlineBtn, width: '100%', marginBottom: 12 }}>Copy Password</button>}
             <button type="button" onClick={() => {
               if (!resetPwd.trim() || !showReset) return
-              updateOperationUserPassword(showReset.id, resetPwd.trim())
+              if (isSuperAdminUser(showReset)) {
+                updateSuperAdminPassword(resetPwd.trim())
+              } else {
+                updateOperationUserPassword(showReset.id, resetPwd.trim())
+              }
               setShowReset(null)
               setToast('Password reset successfully')
             }} style={{ ...primaryBtn, width: '100%' }}>Confirm Reset</button>

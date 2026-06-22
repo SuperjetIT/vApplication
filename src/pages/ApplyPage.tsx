@@ -11,6 +11,14 @@ import { SiteFooter } from '../components/SiteFooter'
 import { flagUrl } from '../utils/flags'
 import { CountryFlag } from '../components/CountryFlag'
 import { scanPassportDocument, getPreferredOcrEngine, isOcrAutoFillEnabled } from '../utils/scanPassportDocument'
+import { buildPassportAutoFill } from '../utils/passportOcrHelpers'
+import {
+  formatFullPhone,
+  getDialCodeByCountryCode,
+  getPhoneCodeOptions,
+  getPhonePlaceholder,
+  resolveDefaultPhoneCountry,
+} from '../utils/phoneDialCodes'
 import type { PassportData } from '../utils/passportOCR'
 import { Database } from '../database/db'
 import {
@@ -91,6 +99,7 @@ type TravelerForm = {
   uaeVisaExpiry: string
   emiratesIdExpiry: string
   mobile: string
+  mobileCountryCode: string
   email: string
   nationality: string
   gender: string
@@ -253,7 +262,7 @@ function docRequirementToDocDef(doc: DocumentRequirement): DocDef {
   }
 }
 
-function emptyTraveler(): TravelerForm {
+function emptyTraveler(mobileCountryCode = 'ae'): TravelerForm {
   return {
     firstName: '',
     lastName: '',
@@ -263,103 +272,11 @@ function emptyTraveler(): TravelerForm {
     uaeVisaExpiry: '',
     emiratesIdExpiry: '',
     mobile: '',
+    mobileCountryCode,
     email: '',
     nationality: '',
     gender: '',
   }
-}
-
-const MRZ_NATIONALITY: Record<string, string> = {
-  IND: 'India',
-  PAK: 'Pakistan',
-  BGD: 'Bangladesh',
-  PHL: 'Philippines',
-  NPL: 'Nepal',
-  LKA: 'Sri Lanka',
-  EGY: 'Egypt',
-  ARE: 'United Arab Emirates',
-  GBR: 'United Kingdom',
-  USA: 'United States',
-  KEN: 'Kenya',
-  NGA: 'Nigeria',
-  GHA: 'Ghana',
-  JOR: 'Jordan',
-  LBN: 'Lebanon',
-  SYR: 'Syria',
-  ETH: 'Ethiopia',
-  IDN: 'Indonesia',
-  MYS: 'Malaysia',
-  THA: 'Thailand',
-  VNM: 'Vietnam',
-  CHN: 'China',
-  JPN: 'Japan',
-  KOR: 'South Korea',
-  AUS: 'Australia',
-  CAN: 'Canada',
-  DEU: 'Germany',
-  FRA: 'France',
-  SAU: 'Saudi Arabia',
-  QAT: 'Qatar',
-  KWT: 'Kuwait',
-  BHR: 'Bahrain',
-  OMN: 'Oman',
-  TUR: 'Turkey',
-  MAR: 'Morocco',
-  AFG: 'Afghanistan',
-}
-
-function ocrDateToDisplay(ddmmyyyy: string): string {
-  const parts = ddmmyyyy.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-  if (!parts) return ddmmyyyy
-  const d = new Date(
-    Number.parseInt(parts[3], 10),
-    Number.parseInt(parts[2], 10) - 1,
-    Number.parseInt(parts[1], 10),
-  )
-  if (Number.isNaN(d.getTime())) return ddmmyyyy
-  return formatDateLabel(d)
-}
-
-function mapNationalityFromOcr(value: string, rawText = ''): string {
-  const tryCode = (code: string): string => {
-    const upper = code.toUpperCase().trim()
-    if (!upper) return ''
-    if (MRZ_NATIONALITY[upper]) return MRZ_NATIONALITY[upper]
-    const byCode = ALL_CITIZENSHIPS.find((c) => c.code === upper)
-    return byCode?.name ?? ''
-  }
-
-  const fromValue = value.trim()
-  if (fromValue) {
-    const fromCode = tryCode(fromValue)
-    if (fromCode) return fromCode
-    const exact = ALL_CITIZENSHIPS.find((c) => c.name.toLowerCase() === fromValue.toLowerCase())
-    if (exact) return exact.name
-    const partial = ALL_CITIZENSHIPS.find(
-      (c) =>
-        c.name.toLowerCase().includes(fromValue.toLowerCase()) ||
-        fromValue.toLowerCase().includes(c.name.toLowerCase()),
-    )
-    if (partial) return partial.name
-  }
-
-  if (rawText) {
-    const lines = rawText
-      .split('\n')
-      .map((l) => l.toUpperCase().replace(/[^A-Z0-9<]/g, ''))
-      .filter((l) => l.length >= 28)
-    for (const line of lines) {
-      const codes: string[] = []
-      if (line.startsWith('P<')) codes.push(line.slice(2, 5).replace(/</g, ''))
-      if (line.length >= 13) codes.push(line.slice(10, 13).replace(/</g, ''))
-      for (const code of codes) {
-        const mapped = tryCode(code)
-        if (mapped) return mapped
-      }
-    }
-  }
-
-  return ''
 }
 
 function emptyTravelInfo(): TravelInfo {
@@ -686,10 +603,19 @@ function PassportUploadSection({
   onFillManually: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [showDebug, setShowDebug] = useState(false)
 
   const handleFile = (file: File | undefined) => {
     if (file) onUpload(file)
+  }
+
+  const handleRescan = () => {
+    onRescan()
+    window.setTimeout(() => inputRef.current?.click(), 0)
+  }
+
+  const handleTryAgain = () => {
+    onTryAgain()
+    window.setTimeout(() => inputRef.current?.click(), 0)
   }
 
   const cornerStyle = (position: 'tl' | 'tr' | 'bl' | 'br'): CSSProperties => {
@@ -859,39 +785,11 @@ function PassportUploadSection({
           </p>
           <button
             type="button"
-            onClick={onRescan}
+            onClick={handleRescan}
             style={{ border: 'none', background: 'none', color: ACCENT, fontSize: 12, cursor: 'pointer', padding: 0 }}
           >
             Re-scan
           </button>
-          {scannedData.rawText && (
-            <div style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                onClick={() => setShowDebug((v) => !v)}
-                style={{ border: 'none', background: 'none', color: '#888', fontSize: 11, cursor: 'pointer', padding: 0 }}
-              >
-                {showDebug ? 'Hide raw OCR text ▲' : 'Show raw OCR text ▼'}
-              </button>
-              {showDebug && (
-                <pre
-                  style={{
-                    margin: '8px 0 0',
-                    background: '#f5f5f5',
-                    fontSize: 10,
-                    maxHeight: 100,
-                    overflow: 'auto',
-                    padding: 8,
-                    borderRadius: 6,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {scannedData.rawText}
-                </pre>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -906,7 +804,7 @@ function PassportUploadSection({
           </p>
           <button
             type="button"
-            onClick={onRescan}
+            onClick={handleRescan}
             style={{ border: 'none', background: 'none', color: ACCENT, fontSize: 12, cursor: 'pointer', padding: 0, marginTop: 10 }}
           >
             Upload a different file
@@ -921,7 +819,7 @@ function PassportUploadSection({
             Tips: ensure good lighting, all 4 corners visible, no glare
           </p>
           <div style={{ display: 'flex', gap: 16 }}>
-            <button type="button" onClick={onTryAgain} style={{ border: 'none', background: 'none', color: ACCENT, fontSize: 12, cursor: 'pointer', padding: 0 }}>
+            <button type="button" onClick={handleTryAgain} style={{ border: 'none', background: 'none', color: ACCENT, fontSize: 12, cursor: 'pointer', padding: 0 }}>
               Try again
             </button>
             <button type="button" onClick={onFillManually} style={{ border: 'none', background: 'none', color: ACCENT, fontSize: 12, cursor: 'pointer', padding: 0 }}>
@@ -1588,23 +1486,32 @@ type CheckoutFormProps = {
 function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate, returnDate, pricing, docsComplete, uploads, mockCheckout = false }: CheckoutFormProps) {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { residenceCountry, residencyStatus } = useCitizenship()
   const stripe = useStripe()
   const elements = useElements()
   const [paying, setPaying] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
-  const [payMethod, setPayMethod] = useState<'card' | 'bank'>('card')
+  const [payMethod, setPayMethod] = useState<'card' | 'bank' | 'wallet' | 'wallet_partial'>('card')
 
   const primary = travelers[0]
   const primaryName = `${primary?.firstName ?? ''} ${primary?.lastName ?? ''}`.trim() || 'Guest Traveler'
   const customerEmail = (primary?.email?.trim() || user?.email?.trim() || '').toLowerCase()
   const travelersCount = travelers.length
+  const vatPreview = Number((pricing.total * 0.05).toFixed(2))
+  const grandTotalPreview = Number((pricing.total + vatPreview).toFixed(2))
+  const existingUser = customerEmail ? Database.getUserByEmail(customerEmail) : null
+  const walletBalance = existingUser ? Database.getUserWalletBalance(String(existingUser.id)) : 0
+  const walletCoversAll = walletBalance >= grandTotalPreview
+  const walletPartialRemainder = Math.max(0, grandTotalPreview - walletBalance)
 
   const finalizeAndNavigate = (status: 'success' | 'failed' | 'unpaid', paymentSuccess: boolean) => {
     const today = formatDateLabel(new Date())
     const due = new Date()
     due.setDate(due.getDate() + 7)
     const subtotal = pricing.gov * travelersCount + pricing.processing * travelersCount - pricing.discount
-    const paymentMethod = payMethod === 'bank' ? 'Bank Transfer' : 'Card'
+    const paymentMethod = payMethod === 'bank' ? 'Bank Transfer' : payMethod === 'wallet' || payMethod === 'wallet_partial' ? 'Wallet' : 'Card'
+    const useWallet = payMethod === 'wallet' || payMethod === 'wallet_partial'
+    const walletPayAmount = payMethod === 'wallet' ? grandTotalPreview : payMethod === 'wallet_partial' ? Math.min(walletBalance, grandTotalPreview) : 0
 
     let applicationId = ''
     let invoiceId = ''
@@ -1614,11 +1521,11 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
         ?? Database.createUser({
           fullName: primaryName,
           email: customerEmail,
-          phone: (primary as { phone?: string })?.phone ?? '',
-          phoneCode: '+971',
+          phone: formatFullPhone(getDialCodeByCountryCode(primary?.mobileCountryCode ?? 'ae'), primary?.mobile ?? ''),
+          phoneCode: getDialCodeByCountryCode(primary?.mobileCountryCode ?? 'ae'),
           passportCountry: primary?.nationality ?? 'Unknown',
-          residenceCountry: 'UAE',
-          residencyStatus: 'Resident',
+          residenceCountry,
+          residencyStatus,
           isVerified: true,
           profilePhoto: null,
           lastLogin: new Date().toISOString(),
@@ -1666,7 +1573,7 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
           total: pricing.total,
         },
         paymentStatus: paymentSuccess ? 'paid' : 'pending',
-        paymentMethod: payMethod === 'bank' ? 'bank_transfer' : 'card',
+        paymentMethod: useWallet ? 'wallet' : payMethod === 'bank' ? 'bank_transfer' : 'card',
         countryCode: country.countryCode,
       })
       applicationId = String(dbApplication.id)
@@ -1684,7 +1591,7 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
         vat,
         total: grandTotal,
         status: paymentSuccess ? 'paid' : 'unpaid',
-        paymentMethod: paymentSuccess ? 'card' : payMethod === 'bank' ? 'bank_transfer' : null,
+        paymentMethod: paymentSuccess ? (useWallet ? 'wallet' : 'card') : payMethod === 'bank' ? 'bank_transfer' : null,
         dueDate: due.toISOString(),
         paidAt: paymentSuccess ? new Date().toISOString() : null,
         countryCode: country.countryCode,
@@ -1692,12 +1599,15 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
       invoiceId = String(invoice.id)
 
       if (paymentSuccess) {
+        if (useWallet && walletPayAmount > 0) {
+          Database.deductUserWallet(String(dbUser.id), walletPayAmount, applicationId)
+        }
         Database.createPayment({
           invoiceId,
           applicationId,
           amount: grandTotal,
-          method: 'card',
-          gateway: 'stripe',
+          method: useWallet ? 'wallet' : 'card',
+          gateway: useWallet ? 'wallet' : 'stripe',
           status: 'success',
         })
       }
@@ -1744,6 +1654,23 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
     finalizeAndNavigate('unpaid', false)
   }
 
+  const handleWalletPay = () => {
+    if (!customerEmail) {
+      setPayError('Please enter a valid email on the Personal Details step.')
+      return
+    }
+    if (payMethod === 'wallet' && walletBalance < grandTotalPreview) {
+      setPayError('Insufficient wallet balance.')
+      return
+    }
+    setPayError(null)
+    setPaying(true)
+    window.setTimeout(() => {
+      setPaying(false)
+      finalizeAndNavigate('success', true)
+    }, 400)
+  }
+
   const handleMockPay = () => {
     if (!customerEmail) {
       setPayError('Please enter a valid email on the Personal Details step.')
@@ -1758,6 +1685,10 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
   }
 
   const handlePay = async () => {
+    if (payMethod === 'wallet') {
+      handleWalletPay()
+      return
+    }
     if (mockCheckout) {
       handleMockPay()
       return
@@ -1825,7 +1756,52 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
 
       <div style={{ background: '#fff', borderRadius: 16, padding: 24, marginBottom: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
         <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: 15 }}>Payment method</p>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          {walletBalance > 0 && (
+            <button
+              type="button"
+              disabled={!walletCoversAll}
+              onClick={() => walletCoversAll && setPayMethod('wallet')}
+              style={{
+                padding: 16,
+                borderRadius: 12,
+                border: payMethod === 'wallet' ? '2px solid #22c55e' : '1px solid #eee',
+                background: walletCoversAll ? (payMethod === 'wallet' ? '#f0fff4' : '#fff') : '#f5f5f5',
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: walletCoversAll ? 'pointer' : 'not-allowed',
+                textAlign: 'left',
+              }}
+            >
+              💰 Pay from Wallet (AED {walletBalance.toLocaleString()} available)
+              {walletCoversAll ? (
+                <div style={{ fontSize: 12, color: '#666', fontWeight: 400, marginTop: 4 }}>After payment: AED {(walletBalance - grandTotalPreview).toLocaleString()}</div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 4 }}>
+                  Insufficient — use partial option below
+                </div>
+              )}
+            </button>
+          )}
+          {walletBalance > 0 && !walletCoversAll && (
+            <button
+              type="button"
+              onClick={() => setPayMethod('wallet_partial')}
+              style={{
+                padding: 16,
+                borderRadius: 12,
+                border: payMethod === 'wallet_partial' ? `2px solid ${ACCENT}` : '1px solid #eee',
+                background: payMethod === 'wallet_partial' ? '#f0f0ff' : '#fff',
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              💰 Use AED {walletBalance.toLocaleString()} from wallet + pay AED {walletPartialRemainder.toLocaleString()} by card
+            </button>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
           {([
             { key: 'card' as const, label: '💳 Pay by Card (Stripe)' },
             { key: 'bank' as const, label: '🏦 Bank Transfer' },
@@ -1848,9 +1824,10 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
               {m.label}
             </button>
           ))}
+          </div>
         </div>
 
-        {payMethod === 'card' ? (
+        {payMethod === 'card' || payMethod === 'wallet_partial' ? (
           <>
             {(stripeTestMode || mockCheckout) && (
               <div
@@ -1934,14 +1911,25 @@ function CheckoutPaymentForm({ country, selectedOption, travelers, departureDate
 
       {payError && <p style={{ margin: '0 0 12px', color: '#dc2626', fontSize: 14, textAlign: 'center' }}>{payError}</p>}
 
-      {payMethod === 'card' ? (
+      {payMethod === 'wallet' ? (
+        <button
+          type="button"
+          disabled={paying || walletBalance < grandTotalPreview}
+          onClick={handleWalletPay}
+          style={{ width: '100%', background: '#22c55e', color: '#fff', border: 'none', borderRadius: 12, padding: 16, fontSize: 16, fontWeight: 700, cursor: paying ? 'wait' : 'pointer' }}
+        >
+          {paying ? 'Processing…' : `Pay AED ${grandTotalPreview.toLocaleString()} from Wallet`}
+        </button>
+      ) : payMethod === 'card' || payMethod === 'wallet_partial' ? (
         <button
           type="button"
           disabled={(!mockCheckout && !stripe) || paying}
           onClick={() => void handlePay()}
           style={{ width: '100%', background: BRAND, color: '#fff', border: 'none', borderRadius: 12, padding: 16, fontSize: 16, fontWeight: 700, cursor: paying ? 'wait' : 'pointer' }}
         >
-          {paying ? 'Processing…' : mockCheckout ? `Test Pay AED ${pricing.total}` : `Pay AED ${pricing.total}`}
+          {paying ? 'Processing…' : payMethod === 'wallet_partial'
+            ? `Pay AED ${walletPartialRemainder.toLocaleString()} by Card (+ AED ${walletBalance.toLocaleString()} wallet)`
+            : mockCheckout ? `Test Pay AED ${pricing.total}` : `Pay AED ${pricing.total}`}
         </button>
       ) : (
         <button
@@ -2016,9 +2004,11 @@ export default function ApplyPage() {
   const [scannedDataByTraveler, setScannedDataByTraveler] = useState<Record<number, PassportData>>({})
   const [previewUrls, setPreviewUrls] = useState<Record<number, string>>({})
   const [previewIsPdf, setPreviewIsPdf] = useState<Record<number, boolean>>({})
+  const [mobileCountryCodeTouched, setMobileCountryCodeTouched] = useState<Record<number, boolean>>({})
   const [returnCalendarHighlight, setReturnCalendarHighlight] = useState(false)
   const returnCalendarRef = useRef<HTMLDivElement>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const phoneCodeOptions = useMemo(() => getPhoneCodeOptions(), [])
 
   const { travelers, travelInfo, uploads, departureDate, returnDate } = formData
 
@@ -2047,6 +2037,22 @@ export default function ApplyPage() {
       return { ...prev, 0: [...fields, 'email'] }
     })
   }, [user?.email])
+
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      travelers: prev.travelers.map((t, i) => {
+        if (mobileCountryCodeTouched[i]) return t
+        const next = resolveDefaultPhoneCountry({
+          residenceCode,
+          residenceCountry,
+          nationality: t.nationality || citizenship,
+        })
+        if (t.mobileCountryCode === next.countryCode) return t
+        return { ...t, mobileCountryCode: next.countryCode }
+      }),
+    }))
+  }, [residenceCode, residenceCountry, citizenship, mobileCountryCodeTouched])
 
   useEffect(() => {
     if (step !== 'docs') return
@@ -2216,6 +2222,11 @@ export default function ApplyPage() {
       delete next[travelerIndex]
       return next
     })
+    setAutoFilledFields((prev) => {
+      const next = { ...prev }
+      delete next[travelerIndex]
+      return next
+    })
     const uploadKey = passportUploadKey(travelerIndex)
     setFormData((prev) => {
       if (!prev.uploads[uploadKey] && !prev.travelers[travelerIndex]?.passportFile) return prev
@@ -2269,58 +2280,29 @@ export default function ApplyPage() {
         setScanProgress((prev) => ({ ...prev, [travelerIndex]: progress }))
       })
 
-      const mappedNationality = mapNationalityFromOcr(data.nationality, data.rawText)
-      const displayDob = data.dateOfBirth ? ocrDateToDisplay(data.dateOfBirth) : ''
-      const displayExpiry = data.expiryDate ? ocrDateToDisplay(data.expiryDate) : ''
-
       const shouldAutoFill = engine ? isOcrAutoFillEnabled(engine) : false
-      const filledFields: string[] = []
+      const { fields, filledKeys, displayData } = buildPassportAutoFill(data, shouldAutoFill)
+      const filledFields = [...filledKeys]
+      if (shouldAutoFill && data.gender) {
+        filledFields.push('gender')
+      }
+
       setFormData((prev) => ({
         ...prev,
         travelers: prev.travelers.map((t, i) => {
           if (i !== travelerIndex) return t
-          const next = { ...t, passportFile: file }
-          if (!shouldAutoFill) return next
-          if (!t.firstName && data.firstName) {
-            next.firstName = data.firstName.toUpperCase()
-            filledFields.push('firstName')
+          return {
+            ...t,
+            passportFile: file,
+            ...fields,
+            ...(shouldAutoFill && data.gender ? { gender: data.gender } : {}),
           }
-          if (!t.lastName && data.lastName) {
-            next.lastName = data.lastName.toUpperCase()
-            filledFields.push('lastName')
-          }
-          if (!t.passportNumber && data.passportNumber) {
-            next.passportNumber = data.passportNumber.toUpperCase()
-            filledFields.push('passportNumber')
-          }
-          if (!t.dateOfBirth && displayDob) {
-            next.dateOfBirth = displayDob
-            filledFields.push('dateOfBirth')
-          }
-          if (!t.passportExpiry && displayExpiry) {
-            next.passportExpiry = displayExpiry
-            filledFields.push('passportExpiry')
-          }
-          if (shouldAutoFill && mappedNationality) {
-            next.nationality = mappedNationality
-            filledFields.push('nationality')
-          }
-          if (!t.gender && data.gender) {
-            next.gender = data.gender
-            filledFields.push('gender')
-          }
-          return next
         }),
       }))
 
       setScannedDataByTraveler((prev) => ({
         ...prev,
-        [travelerIndex]: {
-          ...data,
-          nationality: mappedNationality || data.nationality,
-          dateOfBirth: displayDob || data.dateOfBirth,
-          expiryDate: displayExpiry || data.expiryDate,
-        },
+        [travelerIndex]: displayData,
       }))
       setAutoFilledFields((prev) => ({ ...prev, [travelerIndex]: filledFields }))
       setScanResult((prev) => ({ ...prev, [travelerIndex]: 'success' }))
@@ -2365,7 +2347,12 @@ export default function ApplyPage() {
   }
 
   const addTraveler = () => {
-    setFormData((prev) => ({ ...prev, travelers: [...prev.travelers, emptyTraveler()] }))
+    const { countryCode } = resolveDefaultPhoneCountry({
+      residenceCode,
+      residenceCountry,
+      nationality: citizenship,
+    })
+    setFormData((prev) => ({ ...prev, travelers: [...prev.travelers, emptyTraveler(countryCode)] }))
   }
 
   const removeTraveler = (index: number) => {
@@ -2549,7 +2536,7 @@ export default function ApplyPage() {
             <div style={{ height: '100%', width: `${Math.max(progress, 4)}%`, background: ACCENT, borderRadius: 2, transition: 'width 0.3s ease' }} />
           </div>
         </div>
-        <Link to={isLoggedIn ? '/user/me' : '/'} style={{ justifySelf: 'end', width: 40, height: 40, borderRadius: '50%', border: '1px solid #eee', background: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }} aria-label="Home">
+        <Link to="/" style={{ justifySelf: 'end', width: 40, height: 40, borderRadius: '50%', border: '1px solid #eee', background: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }} aria-label="Home">
           <HomeIcon />
         </Link>
       </header>
@@ -2699,8 +2686,34 @@ export default function ApplyPage() {
                         <div>
                           <FieldLabel autoFilled={isAutoFilled(index, 'mobile')}>Mobile Number *</FieldLabel>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginTop: 6 }}>
-                            <span style={{ borderBottom: '1px solid #ddd', padding: '10px 0', fontSize: 14, color: '#333', fontWeight: 600 }}>+971</span>
-                            <input style={{ ...borderInputStyle, marginTop: 0, flex: 1 }} value={traveler.mobile} onChange={(e) => updateTraveler(index, 'mobile', e.target.value.replace(/\D/g, ''))} placeholder="501234567" />
+                            <select
+                              value={traveler.mobileCountryCode}
+                              onChange={(e) => {
+                                setMobileCountryCodeTouched((prev) => ({ ...prev, [index]: true }))
+                                updateTraveler(index, 'mobileCountryCode', e.target.value)
+                              }}
+                              aria-label="Country calling code"
+                              style={{
+                                ...borderInputStyle,
+                                marginTop: 0,
+                                minWidth: isMobile ? 120 : 150,
+                                maxWidth: isMobile ? 140 : 180,
+                                padding: '10px 8px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {phoneCodeOptions.map((opt) => (
+                                <option key={opt.countryCode} value={opt.countryCode}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              style={{ ...borderInputStyle, marginTop: 0, flex: 1 }}
+                              value={traveler.mobile}
+                              onChange={(e) => updateTraveler(index, 'mobile', e.target.value.replace(/\D/g, ''))}
+                              placeholder={getPhonePlaceholder(getDialCodeByCountryCode(traveler.mobileCountryCode))}
+                            />
                           </div>
                         </div>
                         <div style={{ gridColumn: isMobile ? '1' : '1 / -1' }}>

@@ -7,6 +7,35 @@ const SETTINGS_PATH = path.join(__dirname, 'email-settings.json')
 
 const MASK = '••••••••'
 
+export function isMaskedSecret(value) {
+  return value === MASK || value === '••••••••'
+}
+
+function validateResendApiKey(apiKey, isUpdate = false) {
+  const trimmed = String(apiKey ?? '').trim()
+  if (!trimmed || isMaskedSecret(trimmed)) return trimmed
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    throw new Error('Invalid Resend API key. Paste your key from resend.com (starts with re_), not a website URL.')
+  }
+  if (!trimmed.startsWith('re_')) {
+    throw new Error('Resend API key must start with re_')
+  }
+  if (trimmed.length < 20) {
+    throw new Error('Resend API key looks too short. Copy the full key from your Resend dashboard.')
+  }
+  return trimmed
+}
+
+function applyProviderExclusivity(next, updates) {
+  if (updates.resend?.enabled === true) {
+    next.smtp = { ...next.smtp, enabled: false }
+  }
+  if (updates.smtp?.enabled === true) {
+    next.resend = { ...next.resend, enabled: false }
+  }
+  return next
+}
+
 const defaults = () => ({
   smtp: {
     enabled: true,
@@ -34,10 +63,10 @@ const defaults = () => ({
 
 function mergeProvider(current, updates) {
   const next = { ...current, ...updates }
-  if (updates?.pass === MASK) {
+  if (updates?.pass === MASK || isMaskedSecret(updates?.pass)) {
     next.pass = current.pass
   }
-  if (updates?.apiKey === MASK) {
+  if (updates?.apiKey === MASK || isMaskedSecret(updates?.apiKey)) {
     next.apiKey = current.apiKey
   }
   return next
@@ -48,11 +77,22 @@ export function loadEmailSettings() {
   try {
     if (fs.existsSync(SETTINGS_PATH)) {
       const raw = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'))
-      return {
+      const merged = {
         smtp: { ...base.smtp, ...(raw.smtp ?? {}) },
         resend: { ...base.resend, ...(raw.resend ?? {}) },
         sendgrid: { ...base.sendgrid, ...(raw.sendgrid ?? {}) },
       }
+      const resendKey = String(merged.resend.apiKey ?? '').trim()
+      if (
+        resendKey
+        && !isMaskedSecret(resendKey)
+        && (!resendKey.startsWith('re_') || resendKey.startsWith('http'))
+      ) {
+        console.warn('[email-settings] Ignoring invalid Resend API key in settings file')
+        merged.resend.apiKey = ''
+        merged.resend.enabled = false
+      }
+      return merged
     }
   } catch (err) {
     console.warn('[email-settings] Could not read settings file', err)
@@ -78,12 +118,46 @@ export function loadEmailSettings() {
 
 export function saveEmailSettings(updates = {}) {
   const current = loadEmailSettings()
-  const next = {
+  let next = {
     smtp: updates.smtp ? mergeProvider(current.smtp, updates.smtp) : current.smtp,
     resend: updates.resend ? mergeProvider(current.resend, updates.resend) : current.resend,
     sendgrid: updates.sendgrid ? mergeProvider(current.sendgrid, updates.sendgrid) : current.sendgrid,
   }
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(next, null, 2))
+  next = applyProviderExclusivity(next, updates)
+
+  if (updates.resend && next.resend.apiKey && !isMaskedSecret(next.resend.apiKey)) {
+    next.resend.apiKey = validateResendApiKey(next.resend.apiKey, true)
+  }
+
+  if (next.resend.enabled && !next.resend.apiKey) {
+    throw new Error('Resend is enabled but no API key is saved. Add your re_ API key and save again.')
+  }
+
+  const persist = {
+    smtp: {
+      enabled: next.smtp.enabled !== false,
+      host: next.smtp.host,
+      port: next.smtp.port,
+      user: next.smtp.user,
+      pass: next.smtp.pass,
+      fromName: next.smtp.fromName,
+      fromEmail: next.smtp.fromEmail,
+      replyTo: next.smtp.replyTo,
+    },
+    resend: {
+      enabled: next.resend.enabled === true,
+      apiKey: next.resend.apiKey,
+      fromEmail: next.resend.fromEmail,
+      fromName: next.resend.fromName,
+    },
+    sendgrid: {
+      enabled: next.sendgrid.enabled === true,
+      apiKey: next.sendgrid.apiKey,
+      fromEmail: next.sendgrid.fromEmail,
+      fromName: next.sendgrid.fromName,
+    },
+  }
+  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(persist, null, 2))
   return next
 }
 
@@ -93,7 +167,7 @@ export function maskSecret(value) {
 
 export function getResolvedSmtpConfig() {
   const saved = loadEmailSettings().smtp
-  const enabled = saved.enabled !== false
+  const enabled = saved.enabled === true
   const user = String(process.env.SMTP_USER || saved.user || '').trim()
   const pass = String(process.env.SMTP_PASS || saved.pass || '').replace(/\s/g, '')
   return {
@@ -111,9 +185,8 @@ export function getResolvedSmtpConfig() {
 
 export function getActiveEmailProvider() {
   const settings = loadEmailSettings()
-  if (settings.resend?.enabled && settings.resend.apiKey) return 'resend'
-  if (settings.sendgrid?.enabled && settings.sendgrid.apiKey) return 'sendgrid'
-  if (settings.smtp?.enabled !== false && getResolvedSmtpConfig().user && getResolvedSmtpConfig().pass) {
+  if (settings.resend?.enabled === true && settings.resend.apiKey) return 'resend'
+  if (settings.smtp?.enabled === true && getResolvedSmtpConfig().user && getResolvedSmtpConfig().pass) {
     return 'smtp'
   }
   return 'none'
@@ -133,6 +206,7 @@ export function toAdminPayload(settings) {
     resend: {
       ...settings.resend,
       apiKey: maskSecret(settings.resend.apiKey),
+      configured: Boolean(settings.resend.apiKey),
     },
     sendgrid: {
       ...settings.sendgrid,

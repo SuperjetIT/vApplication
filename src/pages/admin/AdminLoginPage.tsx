@@ -3,15 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { ADMIN_BASE_PATH } from '../../config/portalRoutes'
 import { BRAND, BORDER, DANGER, inputStyle, TEXT_MUTED, TEXT_PRIMARY } from '../../components/admin/adminTheme'
 import { setPortalSession } from '../../utils/portalAuth'
+import { authenticateAdminUser } from '../../utils/adminAuth'
 import {
   clearLoginAttempts,
   formatLockoutRemaining,
   getLoginLockState,
   recordFailedLogin,
 } from '../../utils/adminLoginSecurity'
-
-const ADMIN_EMAIL = 'admin@superjetglobal.com'
-const ADMIN_PASSWORD = 'demoadminsjt'
 
 export default function AdminLoginPage() {
   const navigate = useNavigate()
@@ -47,24 +45,25 @@ export default function AdminLoginPage() {
       return
     }
 
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    const result = authenticateAdminUser(email, password)
+    if (result.ok) {
       clearLoginAttempts()
-      setPortalSession('admin', { name: 'Super Admin', email: ADMIN_EMAIL, role: 'admin' })
+      setPortalSession('admin', result.user)
       navigate(ADMIN_BASE_PATH)
       return
     }
 
-    const result = recordFailedLogin()
-    setLocked(result.locked)
-    setLockRemaining(result.remainingMs)
-    setAttemptsLeft(result.attemptsLeft)
+    const attempt = recordFailedLogin()
+    setLocked(attempt.locked)
+    setLockRemaining(attempt.remainingMs)
+    setAttemptsLeft(attempt.attemptsLeft)
     setShake(true)
     window.setTimeout(() => setShake(false), 500)
 
-    if (result.locked) {
-      setError(`Account locked for ${formatLockoutRemaining(result.remainingMs)} after too many failed attempts.`)
+    if (attempt.locked) {
+      setError(`Account locked for ${formatLockoutRemaining(attempt.remainingMs)} after too many failed attempts.`)
     } else {
-      setError(`Invalid credentials. ${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} remaining.`)
+      setError(`Invalid credentials. ${attempt.attemptsLeft} attempt${attempt.attemptsLeft === 1 ? '' : 's'} remaining.`)
     }
   }
 
@@ -91,15 +90,15 @@ export default function AdminLoginPage() {
           )}
 
           <form onSubmit={handleSubmit}>
-            <label style={{ display: 'block', fontSize: 13, color: TEXT_MUTED, marginBottom: 6, fontWeight: 500 }}>Email Address</label>
+            <label style={{ display: 'block', fontSize: 13, color: TEXT_MUTED, marginBottom: 6, fontWeight: 500 }}>Email or Username</label>
             <div style={{ position: 'relative', marginBottom: 16 }}>
               <svg style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TEXT_MUTED} strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
-              <input type="email" value={email} onChange={(e) => { setEmail(e.target.value); setError('') }} disabled={locked} style={{ ...inputStyle, width: '100%', paddingLeft: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} placeholder="Enter your email" />
+              <input type="text" value={email} onChange={(e) => { setEmail(e.target.value); setError('') }} disabled={locked} autoComplete="username" style={{ ...inputStyle, width: '100%', paddingLeft: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} placeholder="Enter your email or username" />
             </div>
             <label style={{ display: 'block', fontSize: 13, color: TEXT_MUTED, marginBottom: 6, fontWeight: 500 }}>Password</label>
             <div style={{ position: 'relative' }}>
               <svg style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TEXT_MUTED} strokeWidth="1.8"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
-              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => { setPassword(e.target.value); setError('') }} disabled={locked} style={{ ...inputStyle, width: '100%', paddingLeft: 44, paddingRight: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} />
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => { setPassword(e.target.value); setError('') }} disabled={locked} autoComplete="current-password" placeholder="Enter your password" style={{ ...inputStyle, width: '100%', paddingLeft: 44, paddingRight: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} />
               <button type="button" onClick={() => setShowPassword((s) => !s)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: TEXT_MUTED }}>{showPassword ? '🙈' : '👁'}</button>
             </div>
             {error && <p style={{ margin: '8px 0 0', color: DANGER, fontSize: 13 }}>{error}</p>}
@@ -108,7 +107,10 @@ export default function AdminLoginPage() {
             )}
             <button type="submit" disabled={locked} style={{ width: '100%', background: locked ? '#e8ecf0' : 'linear-gradient(135deg, #f93e42, #ff6b6b)', color: locked ? TEXT_MUTED : '#fff', border: 'none', borderRadius: 12, padding: 14, fontWeight: 700, fontSize: 14, marginTop: 20, cursor: locked ? 'not-allowed' : 'pointer', boxShadow: locked ? 'none' : '0 8px 24px rgba(249,62,66,0.35)' }}>Sign In</button>
           </form>
-          <p style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center', marginTop: 24, marginBottom: 0 }}>🔒 Secure admin access · AES-256 encrypted</p>
+          <p style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center', marginTop: 16, marginBottom: 0, lineHeight: 1.5 }}>
+            Super Admin uses this Admin Portal. Operations staff sign in at the Operations Portal.
+          </p>
+          <p style={{ color: TEXT_MUTED, fontSize: 12, textAlign: 'center', marginTop: 12, marginBottom: 0 }}>🔒 Secure admin access · AES-256 encrypted</p>
         </div>
       </div>
     </div>

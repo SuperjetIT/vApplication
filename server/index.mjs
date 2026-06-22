@@ -1,7 +1,6 @@
 import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
-import nodemailer from 'nodemailer'
 import { createRequire } from 'module'
 import { getUserByEmail, upsertUser } from './users.mjs'
 import {
@@ -11,6 +10,13 @@ import {
   saveEmailSettings,
   toAdminPayload,
 } from './emailSettings.mjs'
+import {
+  EmailNotConfiguredError,
+  getMailIdentity,
+  isEmailConfigured,
+  resetSmtpTransporter,
+  sendEmail,
+} from './emailSend.mjs'
 
 const require = createRequire(import.meta.url)
 const PassportOcrApi = require('passport-ocr-api').default
@@ -32,21 +38,6 @@ function isValidEmail(email) {
 }
 
 const CONTACT_TO = process.env.CONTACT_TO || 'procurement@superjetgroup.com'
-const DEFAULT_FROM_NAME = 'Superjet Visa'
-const DEFAULT_FROM_EMAIL = 'no-reply@superjetglobal.com'
-const DEFAULT_REPLY_TO = 'inquiry@superjetgroup.com'
-
-/** Customer-facing From — hides the real SMTP login address. */
-function getMailFrom() {
-  const smtp = getResolvedSmtpConfig()
-  const name = smtp.fromName.replace(/"/g, '').trim() || DEFAULT_FROM_NAME
-  const address = smtp.fromEmail.trim().toLowerCase() || DEFAULT_FROM_EMAIL
-  return `"${name}" <${address}>`
-}
-
-function getMailReplyTo() {
-  return getResolvedSmtpConfig().replyTo.trim() || DEFAULT_REPLY_TO
-}
 
 function buildContactEmailHtml({ fullName, email, phone, subject, message }) {
   const safe = (s) =>
@@ -167,35 +158,12 @@ const app = express()
 app.use(cors({ origin: true }))
 app.use(express.json({ limit: '20mb' }))
 
-let transporter = null
-let transporterKey = ''
-
-function getTransporter() {
-  const smtp = getResolvedSmtpConfig()
-  if (!smtp.enabled || !smtp.user || !smtp.pass) {
-    return null
-  }
-  const key = `${smtp.host}:${smtp.port}:${smtp.user}:${smtp.pass.slice(0, 4)}`
-  if (!transporter || transporterKey !== key) {
-    transporter = nodemailer.createTransport({
-      host: smtp.host,
-      port: smtp.port,
-      secure: false,
-      auth: {
-        user: smtp.user,
-        pass: smtp.pass,
-      },
-    })
-    transporterKey = key
-  }
-  return transporter
-}
-
 app.get('/api/health', (_req, res) => {
   const smtp = getResolvedSmtpConfig()
   res.json({
     ok: true,
     smtpConfigured: Boolean(smtp.user && smtp.pass),
+    emailConfigured: isEmailConfigured(),
     activeEmailProvider: getActiveEmailProvider(),
   })
 })
@@ -213,45 +181,37 @@ app.put('/api/admin/email/settings', (req, res) => {
       resend: body.resend,
       sendgrid: body.sendgrid,
     })
-    transporter = null
-    transporterKey = ''
+    resetSmtpTransporter()
     return res.json(toAdminPayload(saved))
   } catch (err) {
     console.error('[admin/email/settings]', err)
-    return res.status(500).json({ ok: false, error: 'Could not save email settings' })
+    const message = err instanceof Error ? err.message : 'Could not save email settings'
+    return res.status(400).json({ ok: false, error: message })
   }
 })
 
 app.post('/api/admin/email/test', async (req, res) => {
   const to = String(req.body?.to ?? '').trim().toLowerCase()
-  const provider = String(req.body?.provider ?? 'smtp')
+  const provider = String(req.body?.provider ?? 'auto')
 
   if (!isValidEmail(to)) {
     return res.status(400).json({ ok: false, error: 'Enter a valid test email address' })
   }
 
-  if (provider !== 'smtp') {
-    return res.status(501).json({ ok: false, error: `${provider} test send is not implemented yet. Use SMTP for OTP emails.` })
-  }
-
-  const mailer = getTransporter()
-  if (!mailer) {
-    return res.status(503).json({ ok: false, error: 'SMTP is not configured. Add host, user and password, then save.' })
-  }
-
   try {
-    await mailer.sendMail({
-      from: getMailFrom(),
-      replyTo: getMailReplyTo(),
+    const result = await sendEmail({
       to,
+      provider,
       subject: 'Superjet Visa — test email',
-      text: 'This is a test email from Admin → Settings → Email. SMTP is working.',
-      html: `<p>This is a test email from <strong>Admin → Settings → Email</strong>.</p><p>SMTP is working.</p>`,
+      text: 'This is a test email from Admin → Settings → Email. Your email integration is working.',
+      html: `<p>This is a test email from <strong>Admin → Settings → Email</strong>.</p><p>Your email integration is working.</p>`,
     })
-    return res.json({ ok: true })
+    return res.json({ ok: true, provider: result.provider })
   } catch (err) {
     console.error('[admin/email/test]', err)
-    return res.status(500).json({ ok: false, error: err instanceof Error ? err.message : 'Test email failed' })
+    const message = err instanceof Error ? err.message : 'Test email failed'
+    const status = err instanceof EmailNotConfiguredError ? 503 : 500
+    return res.status(status).json({ ok: false, error: message })
   }
 })
 
@@ -277,20 +237,16 @@ app.post('/api/contact', async (req, res) => {
     return res.status(400).json({ error: 'Message must be at least 10 characters.' })
   }
 
-  const mailer = getTransporter()
-  if (!mailer) {
+  if (!isEmailConfigured()) {
     return res.status(503).json({
-      error:
-        'Email service is not configured. Run npm run dev and add SMTP settings to .env',
+      error: 'Email service is not configured. Enable Resend, SendGrid, or SMTP in Admin → Settings → Email.',
     })
   }
 
-  const from = getMailFrom()
   const mailSubject = `[Superjet Global Contact] ${subject}`
 
   try {
-    await mailer.sendMail({
-      from,
+    await sendEmail({
       to: CONTACT_TO,
       replyTo: `"${fullName.replace(/"/g, '')}" <${email}>`,
       subject: mailSubject,
@@ -343,10 +299,9 @@ app.post('/api/visa-checker', async (req, res) => {
     return res.status(400).json({ error: 'Travel date is required.' })
   }
 
-  const mailer = getTransporter()
-  if (!mailer) {
+  if (!isEmailConfigured()) {
     return res.status(503).json({
-      error: 'Email service is not configured. Run npm run dev and add SMTP settings to .env',
+      error: 'Email service is not configured. Enable Resend, SendGrid, or SMTP in Admin → Settings → Email.',
     })
   }
 
@@ -364,11 +319,8 @@ app.post('/api/visa-checker', async (req, res) => {
     previousRejection,
   }
 
-  const from = getMailFrom()
-
   try {
-    await mailer.sendMail({
-      from,
+    await sendEmail({
       to: CONTACT_TO,
       replyTo: `"${fullName.replace(/"/g, '')}" <${email}>`,
       subject: `[Visa Checker] ${destinationName} — ${nationalityName} passport`,
@@ -397,10 +349,9 @@ app.post('/api/auth/send-otp', async (req, res) => {
     return res.status(400).json({ error: 'Please enter a valid email address.' })
   }
 
-  const mailer = getTransporter()
-  if (!mailer) {
+  if (!isEmailConfigured()) {
     return res.status(503).json({
-      error: 'Email service is not configured. Add SMTP settings to .env',
+      error: 'Email service is not configured. Enable Resend, SendGrid, or SMTP in Admin → Settings → Email.',
     })
   }
 
@@ -408,13 +359,12 @@ app.post('/api/auth/send-otp', async (req, res) => {
   const expires = Date.now() + OTP_TTL_MS
   otpStore.set(email, { code, expires })
 
-  const from = getMailFrom()
+  const identity = getMailIdentity()
 
   try {
-    await mailer.sendMail({
-      from,
-      replyTo: getMailReplyTo(),
+    await sendEmail({
       to: email,
+      replyTo: identity.replyTo,
       subject: `${code} is your Superjet Global sign-in code`,
       text: `Your Superjet Global verification code is ${code}. It expires in 10 minutes. If you didn't request this, ignore this email.`,
       html: buildOtpEmailHtml(code),
@@ -424,7 +374,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
     console.error('[send-otp]', err)
     otpStore.delete(email)
     return res.status(500).json({
-      error: 'Could not send email. Check SMTP settings and try again.',
+      error: err instanceof Error ? err.message : 'Could not send email. Check email settings and try again.',
     })
   }
 })
@@ -603,7 +553,9 @@ app.post('/api/ocr/passport-api', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`[superjet-global-api] http://localhost:${PORT}`)
-  if (!process.env.SMTP_USER) {
-    console.warn('[superjet-global-api] SMTP_USER missing — copy .env.example to .env')
+  if (!isEmailConfigured()) {
+    console.warn('[superjet-global-api] Email not configured — enable Resend, SendGrid, or SMTP in Admin → Settings → Email')
+  } else {
+    console.log(`[superjet-global-api] Email provider: ${getActiveEmailProvider()}`)
   }
 })

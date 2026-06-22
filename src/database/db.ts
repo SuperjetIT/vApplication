@@ -11,6 +11,7 @@ import documentsData from './documents.json'
 import notificationsData from './notifications.json'
 import activityLogData from './activityLog.json'
 import settingsData from './settings.json'
+import walletTransactionsData from './walletTransactions.json'
 
 type GenericRecord = Record<string, unknown>
 
@@ -28,6 +29,7 @@ type DbShape = {
   notifications: GenericRecord[]
   activities: GenericRecord[]
   settings: GenericRecord
+  walletTransactions: GenericRecord[]
 }
 
 const defaultDb: DbShape = {
@@ -44,12 +46,31 @@ const defaultDb: DbShape = {
   notifications: [...notificationsData.notifications],
   activities: [...activityLogData.activities],
   settings: { ...settingsData },
+  walletTransactions: [...walletTransactionsData.walletTransactions],
 }
 
 let db: DbShape = { ...defaultDb }
 
 export const STORAGE_KEY = 'super_visa_db'
 export const DB_CHANGED_EVENT = 'superVisaDbChanged'
+
+function ensureAdminsSeeded() {
+  const defaultAdmin = adminsData.admins[0]
+  if (!defaultAdmin) return
+  if (!Array.isArray(db.admins)) db.admins = []
+  const email = String(defaultAdmin.email).toLowerCase()
+  const idx = db.admins.findIndex((a) => String(a.email ?? '').toLowerCase() === email)
+  if (idx === -1) {
+    db.admins.unshift({ ...defaultAdmin })
+    saveToStorage()
+    return
+  }
+  const current = db.admins[idx]
+  if (!current.username || !current.password) {
+    db.admins[idx] = { ...defaultAdmin, ...current, username: current.username ?? defaultAdmin.username, password: current.password ?? defaultAdmin.password }
+    saveToStorage()
+  }
+}
 
 function loadFromStorage() {
   try {
@@ -60,6 +81,8 @@ function loadFromStorage() {
   } catch {
     console.warn('Could not load DB from storage, using default JSON data')
   }
+  ensureAdminsSeeded()
+  if (!Array.isArray(db.walletTransactions)) db.walletTransactions = []
 }
 
 function notifyDbChanged() {
@@ -108,7 +131,7 @@ export const Database = {
   getUserById: (id: string) => db.users.find((u) => String(u.id) === id),
   getUserByEmail: (email: string) => db.users.find((u) => String(u.email) === email),
   createUser: (data: GenericRecord) => {
-    const newUser = { id: generateId('usr'), createdAt: new Date().toISOString(), ...data }
+    const newUser = { id: generateId('usr'), createdAt: new Date().toISOString(), walletBalance: 0, ...data }
     db.users.push(newUser)
     saveToStorage()
     return newUser
@@ -137,6 +160,7 @@ export const Database = {
       totalApplications: 0,
       totalRevenue: 0,
       totalCommission: 0,
+      walletBalance: 0,
       status: 'pending',
       ...data,
     }
@@ -154,25 +178,137 @@ export const Database = {
   updatePartnerPassword: (id: string, password: string) => Database.updatePartner(id, { password }),
   getPartnerWalletBalance: (partnerId: string) => {
     const partner = db.partners.find((p) => String(p.id) === partnerId)
-    return toNum(partner?.walletBalance ?? 2400)
+    return toNum(partner?.walletBalance ?? 0)
   },
-  deductPartnerWallet: (partnerId: string, amount: number) => {
-    const idx = db.partners.findIndex((p) => String(p.id) === partnerId)
-    if (idx === -1) return false
-    const balance = toNum(db.partners[idx].walletBalance ?? 2400)
-    if (balance < amount) return false
-    db.partners[idx] = { ...db.partners[idx], walletBalance: balance - amount }
-    saveToStorage()
-    return true
-  },
-  creditPartnerWallet: (partnerId: string, amount: number) => {
+  topUpPartnerWallet: (partnerId: string, amount: number, addedBy: string, note?: string) => {
     const idx = db.partners.findIndex((p) => String(p.id) === partnerId)
     if (idx === -1) return null
-    const balance = toNum(db.partners[idx].walletBalance ?? 2400)
-    db.partners[idx] = { ...db.partners[idx], walletBalance: balance + amount }
+    const prevBalance = toNum(db.partners[idx].walletBalance ?? 0)
+    const nextBalance = prevBalance + amount
+    db.partners[idx] = { ...db.partners[idx], walletBalance: nextBalance }
+    const txn = {
+      id: generateId('wtxn'),
+      walletType: 'b2b',
+      ownerId: partnerId,
+      type: 'credit',
+      amount,
+      balanceBefore: prevBalance,
+      balanceAfter: nextBalance,
+      note: note || 'Top-up by admin',
+      addedBy,
+      createdAt: new Date().toISOString(),
+    }
+    db.walletTransactions.push(txn)
     saveToStorage()
-    return db.partners[idx]
+    Database.logActivity('wallet_topup', `Wallet top-up AED ${amount} for partner ${partnerId}`, undefined, addedBy, 'admin')
+    return txn
   },
+  deductPartnerWallet: (partnerId: string, amount: number, applicationId?: string) => {
+    const idx = db.partners.findIndex((p) => String(p.id) === partnerId)
+    if (idx === -1) return { success: false as const, error: 'Partner not found' }
+    const prevBalance = toNum(db.partners[idx].walletBalance ?? 0)
+    if (prevBalance < amount) return { success: false as const, error: 'Insufficient balance' }
+    const nextBalance = prevBalance - amount
+    db.partners[idx] = { ...db.partners[idx], walletBalance: nextBalance }
+    const txn = {
+      id: generateId('wtxn'),
+      walletType: 'b2b',
+      ownerId: partnerId,
+      type: 'debit',
+      amount,
+      balanceBefore: prevBalance,
+      balanceAfter: nextBalance,
+      note: applicationId ? `Payment for application ${applicationId}` : 'Wallet payment',
+      applicationId,
+      createdAt: new Date().toISOString(),
+    }
+    db.walletTransactions.push(txn)
+    saveToStorage()
+    return { success: true as const, newBalance: nextBalance, txn }
+  },
+  creditPartnerWallet: (partnerId: string, amount: number) =>
+    Database.topUpPartnerWallet(partnerId, amount, 'system', 'Commission credit'),
+
+  getUserWalletBalance: (userId: string) => {
+    const user = db.users.find((u) => String(u.id) === userId)
+    return toNum(user?.walletBalance ?? 0)
+  },
+  topUpUserWallet: (userId: string, amount: number, paymentId?: string) => {
+    const idx = db.users.findIndex((u) => String(u.id) === userId)
+    if (idx === -1) return null
+    const prevBalance = toNum(db.users[idx].walletBalance ?? 0)
+    const nextBalance = prevBalance + amount
+    db.users[idx] = { ...db.users[idx], walletBalance: nextBalance }
+    const txn = {
+      id: generateId('wtxn'),
+      walletType: 'b2c',
+      ownerId: userId,
+      type: 'credit',
+      amount,
+      balanceBefore: prevBalance,
+      balanceAfter: nextBalance,
+      note: paymentId ? `Top-up via card (${paymentId})` : 'Refund credited',
+      paymentId,
+      createdAt: new Date().toISOString(),
+    }
+    db.walletTransactions.push(txn)
+    saveToStorage()
+    return txn
+  },
+  deductUserWallet: (userId: string, amount: number, applicationId: string) => {
+    const idx = db.users.findIndex((u) => String(u.id) === userId)
+    if (idx === -1) return { success: false as const, error: 'User not found' }
+    const prevBalance = toNum(db.users[idx].walletBalance ?? 0)
+    if (prevBalance < amount) return { success: false as const, error: 'Insufficient balance' }
+    const nextBalance = prevBalance - amount
+    db.users[idx] = { ...db.users[idx], walletBalance: nextBalance }
+    const txn = {
+      id: generateId('wtxn'),
+      walletType: 'b2c',
+      ownerId: userId,
+      type: 'debit',
+      amount,
+      balanceBefore: prevBalance,
+      balanceAfter: nextBalance,
+      note: `Payment for application ${applicationId}`,
+      applicationId,
+      createdAt: new Date().toISOString(),
+    }
+    db.walletTransactions.push(txn)
+    saveToStorage()
+    return { success: true as const, newBalance: nextBalance, txn }
+  },
+  refundToWallet: (ownerId: string, ownerType: 'b2c' | 'b2b', amount: number, _applicationId: string, reason: string) => {
+    if (ownerType === 'b2c') {
+      return Database.topUpUserWallet(ownerId, amount)
+    }
+    return Database.topUpPartnerWallet(ownerId, amount, 'system', `Refund: ${reason}`)
+  },
+  getWalletTransactions: (ownerId: string) =>
+    db.walletTransactions
+      .filter((t) => String(t.ownerId) === ownerId)
+      .sort((a, b) => new Date(String(b.createdAt)).getTime() - new Date(String(a.createdAt)).getTime()),
+  getAllWalletTransactions: () =>
+    [...db.walletTransactions].sort(
+      (a, b) => new Date(String(b.createdAt)).getTime() - new Date(String(a.createdAt)).getTime(),
+    ),
+  getAllWalletBalances: () => ({
+    b2bWallets: db.partners.map((p) => ({
+      id: String(p.id),
+      name: String(p.companyName ?? ''),
+      type: 'b2b' as const,
+      balance: toNum(p.walletBalance ?? 0),
+      email: String(p.email ?? ''),
+      contactPerson: String(p.contactPerson ?? ''),
+    })),
+    b2cWallets: db.users.map((u) => ({
+      id: String(u.id),
+      name: String(u.fullName ?? ''),
+      type: 'b2c' as const,
+      balance: toNum(u.walletBalance ?? 0),
+      email: String(u.email ?? ''),
+    })),
+  }),
 
   getApplications: (filters?: { type?: string; status?: string; userId?: string; partnerId?: string }) => {
     let result = db.applications
@@ -216,6 +352,23 @@ export const Database = {
     }
     saveToStorage()
     Database.logActivity('status_updated', `Application ${id} status changed to ${status}`, id, updatedBy, 'operations')
+    const app = db.applications[idx]
+    if (String(app.type) === 'b2b' && app.partnerId) {
+      Database.createNotification({
+        userId: String(app.partnerId),
+        userType: 'partner',
+        title: 'Application Status Updated',
+        message: `Your application for ${String(app.destinationName ?? app.destination)} is now ${status}`,
+        applicationId: id,
+      })
+    }
+    return app
+  },
+  updateApplication: (id: string, updates: GenericRecord) => {
+    const idx = db.applications.findIndex((a) => String(a.id) === id)
+    if (idx === -1) return null
+    db.applications[idx] = { ...db.applications[idx], ...updates, updatedAt: new Date().toISOString() }
+    saveToStorage()
     return db.applications[idx]
   },
 
@@ -329,8 +482,26 @@ export const Database = {
     return db.operators[idx]
   },
 
-  validateAdminLogin: (email: string, password: string) =>
-    db.admins.find((a) => String(a.email) === email && String(a.password) === password) ?? null,
+  validateAdminLogin: (emailOrUsername: string, password: string) => {
+    const input = emailOrUsername.trim().toLowerCase()
+    const pwd = password.trim()
+    if (!input || !pwd) return null
+    return (
+      db.admins.find((a) => {
+        const email = String(a.email ?? '').toLowerCase()
+        const username = String(a.username ?? 'superadmin').toLowerCase()
+        return (email === input || username === input) && String(a.password) === pwd
+      }) ?? null
+    )
+  },
+  updateAdminPassword: (email: string, password: string) => {
+    const normalized = email.trim().toLowerCase()
+    const idx = db.admins.findIndex((a) => String(a.email ?? '').toLowerCase() === normalized)
+    if (idx === -1) return null
+    db.admins[idx] = { ...db.admins[idx], password: password.trim() }
+    saveToStorage()
+    return db.admins[idx]
+  },
   validateOperatorLogin: (username: string, password: string) =>
     db.operators.find((o) => String(o.username) === username && String(o.password) === password) ?? null,
 
@@ -403,6 +574,11 @@ export const Database = {
       totalCommissionPaid: db.commissions
         .filter((c) => String(c.status).toLowerCase() === 'paid')
         .reduce((sum, c) => sum + toNum(c.commissionAmount), 0),
+      b2bWalletTotal: db.partners.reduce((sum, p) => sum + toNum(p.walletBalance ?? 0), 0),
+      b2cWalletTotal: db.users.reduce((sum, u) => sum + toNum(u.walletBalance ?? 0), 0),
+      totalWalletBalance:
+        db.partners.reduce((sum, p) => sum + toNum(p.walletBalance ?? 0), 0)
+        + db.users.reduce((sum, u) => sum + toNum(u.walletBalance ?? 0), 0),
     }
   },
 

@@ -6,6 +6,7 @@ import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BRAND_BLUE, BORDER, cardStyle, inputStyle, outlineBtn, PAGE_BG, primaryBtn, SUCCESS, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
 import { usePortalBase } from '../../hooks/usePortalBase'
 import { useDatabaseListener } from '../../hooks/useDatabase'
+import { Database } from '../../database/db'
 import { LEAD_STATUSES, getStatusColor, type LeadStatus } from '../../types/adminTypes'
 import {
   buildAgentNotifyMessage,
@@ -31,6 +32,13 @@ export default function AdminCaseDetail() {
   const [notes, setNotes] = useState<string[]>([])
   const [toast, setToast] = useState<string | null>(null)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [refundOpen, setRefundOpen] = useState(false)
+  const [refundAmount, setRefundAmount] = useState(0)
+  const [refundReason, setRefundReason] = useState('Visa rejected — processing fee refund')
+
+  const application = id ? Database.getApplicationById(id) : undefined
+  const refundProcessed = Boolean(application?.refundProcessed)
+  const defaultRefundAmount = lead?.amount ?? Number((application?.amount as { total?: number } | undefined)?.total ?? 0)
 
   if (!lead) {
     return (
@@ -53,6 +61,68 @@ export default function AdminCaseDetail() {
     updateLeadStatus(lead.id, status)
     setStatusOpen(false)
     setToast(`Status updated to ${status}`)
+    if (status === 'Rejected' && !refundProcessed) {
+      setRefundAmount(defaultRefundAmount)
+      setRefundOpen(true)
+    }
+  }
+
+  const openRefundModal = () => {
+    setRefundAmount(defaultRefundAmount)
+    setRefundOpen(true)
+  }
+
+  const processRefundToWallet = () => {
+    if (!lead || refundAmount <= 0) return
+    const app = Database.getApplicationById(lead.id)
+    const ownerType = isB2B ? 'b2b' : 'b2c'
+    const ownerId = isB2B ? String(app?.partnerId ?? '') : String(app?.userId ?? '')
+    if (!ownerId) {
+      setToast('Could not determine refund recipient')
+      return
+    }
+    Database.refundToWallet(ownerId, ownerType, refundAmount, lead.id, refundReason)
+    Database.updateApplication(lead.id, {
+      refundProcessed: true,
+      refundAmount,
+      refundReason,
+      refundMethod: 'wallet',
+      refundedAt: new Date().toISOString(),
+    })
+    Database.logActivity(
+      'refund_processed',
+      `Refund of AED ${refundAmount} credited to ${ownerType} wallet for application ${lead.id}`,
+      lead.id,
+      'admin',
+      'admin',
+    )
+    setRefundOpen(false)
+    setToast(`Refund of AED ${refundAmount.toLocaleString()} added to ${isB2B ? 'partner' : 'customer'} wallet`)
+  }
+
+  const processRefundOriginal = () => {
+    if (!lead) return
+    Database.updateApplication(lead.id, {
+      refundProcessed: true,
+      refundAmount,
+      refundReason,
+      refundMethod: 'original_payment',
+      refundedAt: new Date().toISOString(),
+    })
+    Database.logActivity('refund_processed', `Refund initiated to original payment method — AED ${refundAmount}`, lead.id, 'admin', 'admin')
+    setRefundOpen(false)
+    setToast('Refund marked for original payment method')
+  }
+
+  const skipRefund = () => {
+    if (!lead) return
+    Database.updateApplication(lead.id, {
+      refundProcessed: true,
+      refundMethod: 'none',
+      refundedAt: new Date().toISOString(),
+    })
+    setRefundOpen(false)
+    setToast('No refund recorded for this application')
   }
 
   const notifyReupload = () => {
@@ -159,6 +229,9 @@ export default function AdminCaseDetail() {
               <button type="button" onClick={() => setToast('Assign B2B Partner — select from Partners page')} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', marginBottom: 8, fontSize: 13 }}>Assign B2B Partner</button>
             )}
             <button type="button" onClick={sendReminder} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', marginBottom: 8, fontSize: 13 }}>{isB2B ? 'Notify Partner' : 'Send Reminder'}</button>
+            {lead.status === 'Rejected' && !refundProcessed && (
+              <button type="button" onClick={openRefundModal} style={{ ...primaryBtn, display: 'block', width: '100%', textAlign: 'center', marginBottom: 8, fontSize: 13 }}>Process Refund</button>
+            )}
             <button type="button" onClick={() => setToast('Document upload — drag & drop coming soon')} style={{ ...outlineBtn, display: 'block', width: '100%', textAlign: 'left', fontSize: 13 }}>Upload Document</button>
           </div>
           <div style={cardStyle}>
@@ -175,6 +248,46 @@ export default function AdminCaseDetail() {
           </div>
         </div>
       </div>
+
+      {refundOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 28, maxWidth: 440, width: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.18)' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 18, color: TEXT_PRIMARY }}>Process Refund</h3>
+            <p style={{ margin: '0 0 20px', fontSize: 14, color: TEXT_SECONDARY }}>
+              Refund AED {refundAmount.toLocaleString()} to {lead.name}&apos;s {isB2B ? 'partner' : 'customer'} wallet?
+            </p>
+            <label style={{ display: 'block', fontSize: 12, color: TEXT_MUTED, marginBottom: 6 }}>Refund amount (AED)</label>
+            <input
+              type="number"
+              min={0}
+              value={refundAmount}
+              onChange={(e) => setRefundAmount(Math.max(0, Number(e.target.value) || 0))}
+              style={{ ...inputStyle, width: '100%', marginBottom: 16, boxSizing: 'border-box' }}
+            />
+            <label style={{ display: 'block', fontSize: 12, color: TEXT_MUTED, marginBottom: 6 }}>Reason</label>
+            <input
+              type="text"
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              style={{ ...inputStyle, width: '100%', marginBottom: 20, boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button type="button" onClick={processRefundToWallet} style={{ ...primaryBtn, width: '100%', fontSize: 14 }}>
+                Refund to Wallet
+              </button>
+              <button type="button" onClick={processRefundOriginal} style={{ ...outlineBtn, width: '100%', fontSize: 14 }}>
+                Refund to Original Payment Method
+              </button>
+              <button type="button" onClick={skipRefund} style={{ ...outlineBtn, width: '100%', fontSize: 14, color: TEXT_MUTED }}>
+                No Refund
+              </button>
+              <button type="button" onClick={() => setRefundOpen(false)} style={{ border: 'none', background: 'none', color: TEXT_MUTED, fontSize: 13, cursor: 'pointer', marginTop: 4 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   )
 }

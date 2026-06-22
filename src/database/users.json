@@ -12,7 +12,8 @@
       "createdAt": "2026-06-01T10:00:00Z",
       "lastLogin": "2026-06-15T08:30:00Z",
       "isVerified": true,
-      "profilePhoto": null
+      "profilePhoto": null,
+      "walletBalance": 0
     }
   ]
 }

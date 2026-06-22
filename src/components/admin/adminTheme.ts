@@ -2,6 +2,9 @@ import type { CSSProperties, MouseEvent } from 'react'
 
 export const BRAND = '#f93e42'
 export const BRAND_BLUE = '#5057ea'
+/** Operations portal — sunset coral (distinct from admin red & agent blue) */
+export const OPS_PRIMARY = '#f97316'
+export const OPS_SECONDARY = '#e11d48'
 export const PAGE_BG = '#f8f9fc'
 export const SIDEBAR_BG = '#ffffff'
 export const CARD_BG = '#ffffff'

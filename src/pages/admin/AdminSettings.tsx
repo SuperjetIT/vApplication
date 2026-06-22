@@ -35,8 +35,13 @@ type ApiEmailSettings = {
   ok: boolean
   activeProvider: string
   smtp: SmtpSettings
-  resend: { enabled: boolean; apiKey: string; fromEmail: string; fromName: string }
-  sendgrid: { enabled: boolean; apiKey: string; fromEmail: string; fromName: string }
+  resend: { enabled: boolean; apiKey: string; fromEmail: string; fromName: string; configured?: boolean }
+}
+
+const MASKED_SECRET = '••••••••'
+
+function isMaskedSecret(value: string) {
+  return value === MASKED_SECRET || value === '********'
 }
 
 const defaultSmtp = (): SmtpSettings => ({
@@ -149,25 +154,13 @@ export default function AdminSettings() {
   const [sherpaConnected, setSherpaConnected] = useState(false)
   const [twoFa, setTwoFa] = useState(false)
 
-  const [mailchimp, setMailchimp] = useState(() => ({
-    enabled: Boolean(readIntegration('mailchimp').enabled),
-    apiKey: String(readIntegration('mailchimp').apiKey ?? ''),
-    audienceId: String(readIntegration('mailchimp').audienceId ?? ''),
-    fromEmail: String(readIntegration('mailchimp').fromEmail ?? 'no-reply@superjetglobal.com'),
-  }))
-
   const [smtp, setSmtp] = useState<SmtpSettings>(defaultSmtp)
   const [resend, setResend] = useState({
     enabled: false,
     apiKey: '',
     fromEmail: 'no-reply@superjetglobal.com',
     fromName: 'Superjet Visa',
-  })
-  const [sendgrid, setSendgrid] = useState({
-    enabled: false,
-    apiKey: '',
-    fromEmail: 'no-reply@superjetglobal.com',
-    fromName: 'Superjet Visa',
+    configured: false,
   })
   const [activeEmailProvider, setActiveEmailProvider] = useState('none')
   const [emailLoading, setEmailLoading] = useState(false)
@@ -202,24 +195,9 @@ export default function AdminSettings() {
 
   const save = () => setToast('Settings saved')
 
-  const saveMailchimp = useCallback(() => {
-    Database.updateIntegrationSettings('mailchimp', mailchimp)
-    setToast('Mailchimp settings saved')
-  }, [mailchimp])
-
-  const updateMailchimp = useCallback((updates: Partial<typeof mailchimp>) => {
-    setMailchimp((prev) => {
-      const next = { ...prev, ...updates }
-      Database.updateIntegrationSettings('mailchimp', next)
-      return next
-    })
-    setToast('Mailchimp saved')
-  }, [])
-
   const applyEmailPayload = useCallback((data: ApiEmailSettings) => {
     setSmtp(data.smtp)
-    setResend(data.resend)
-    setSendgrid(data.sendgrid)
+    setResend({ ...data.resend, configured: Boolean(data.resend.configured) })
     setActiveEmailProvider(data.activeProvider)
   }, [])
 
@@ -240,7 +218,6 @@ export default function AdminSettings() {
   const persistEmailSettings = useCallback(async (updates: {
     smtp?: Partial<SmtpSettings>
     resend?: Partial<typeof resend>
-    sendgrid?: Partial<typeof sendgrid>
   }) => {
     setEmailSaving(true)
     try {
@@ -262,31 +239,63 @@ export default function AdminSettings() {
     }
   }, [applyEmailPayload])
 
-  const updateSmtp = useCallback((updates: Partial<SmtpSettings>) => {
-    setSmtp((prev) => {
-      const next = { ...prev, ...updates }
-      void persistEmailSettings({ smtp: next })
-      return next
-    })
-  }, [persistEmailSettings])
-
   const updateResend = useCallback((updates: Partial<typeof resend>) => {
-    setResend((prev) => {
-      const next = { ...prev, ...updates }
-      void persistEmailSettings({ resend: next })
-      return next
+    if (updates.enabled === true) {
+      const key = resend.apiKey.trim()
+      if (!resend.configured && (!key || isMaskedSecret(key))) {
+        setToast('Paste your Resend API key (re_...) and click Save Resend before enabling')
+        return
+      }
+    }
+    const nextResend = { ...resend, ...updates }
+    setResend(nextResend)
+    if (updates.enabled === true) {
+      setSmtp((s) => ({ ...s, enabled: false }))
+    }
+    void persistEmailSettings({
+      resend: nextResend,
+      ...(updates.enabled === true ? { smtp: { enabled: false } } : {}),
     })
-  }, [persistEmailSettings])
+  }, [resend, persistEmailSettings])
 
-  const updateSendgrid = useCallback((updates: Partial<typeof sendgrid>) => {
-    setSendgrid((prev) => {
-      const next = { ...prev, ...updates }
-      void persistEmailSettings({ sendgrid: next })
-      return next
+  const updateSmtp = useCallback((updates: Partial<SmtpSettings>) => {
+    const nextSmtp = { ...smtp, ...updates }
+    setSmtp(nextSmtp)
+    if (updates.enabled === true) {
+      setResend((r) => ({ ...r, enabled: false }))
+    }
+    void persistEmailSettings({
+      smtp: nextSmtp,
+      ...(updates.enabled === true ? { resend: { enabled: false } } : {}),
     })
-  }, [persistEmailSettings])
+  }, [smtp, persistEmailSettings])
 
-  const sendTestEmail = async (provider: 'smtp' | 'resend' | 'sendgrid') => {
+  const saveResendSettings = useCallback(async () => {
+    const key = resend.apiKey.trim()
+    if (!isMaskedSecret(key) && key && !key.startsWith('re_')) {
+      setToast('Resend API key must start with re_ (copy it from resend.com → API Keys)')
+      return
+    }
+    if (!isMaskedSecret(key) && (key.startsWith('http://') || key.startsWith('https://'))) {
+      setToast('That looks like a website URL, not an API key. Paste your re_ key from Resend.')
+      return
+    }
+    try {
+      await persistEmailSettings({ resend })
+    } catch {
+      /* toast handled in persistEmailSettings */
+    }
+  }, [resend, persistEmailSettings])
+
+  const saveSmtpSettings = useCallback(async () => {
+    try {
+      await persistEmailSettings({ smtp })
+    } catch {
+      /* toast handled in persistEmailSettings */
+    }
+  }, [smtp, persistEmailSettings])
+
+  const sendTestEmail = async (provider: 'smtp' | 'resend' | 'auto') => {
     if (!testEmailTo.trim()) {
       setToast('Enter a test email address first')
       return
@@ -300,7 +309,8 @@ export default function AdminSettings() {
       })
       const data = await res.json()
       if (!res.ok || !data.ok) throw new Error(data.error ?? 'Test email failed')
-      setToast(`Test email sent to ${testEmailTo.trim()}`)
+      const via = data.provider ? ` via ${String(data.provider).toUpperCase()}` : ''
+      setToast(`Test email sent to ${testEmailTo.trim()}${via}`)
     } catch (err) {
       setToast(err instanceof Error ? err.message : 'Test email failed')
     } finally {
@@ -495,7 +505,7 @@ export default function AdminSettings() {
                 <div style={{ width: 44, height: 44, borderRadius: 12, background: PAGE_BG, border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📬</div>
                 <div>
                   <span style={{ fontWeight: 700, fontSize: 15, display: 'block' }}>SMTP</span>
-                  <span style={{ fontSize: 12, color: TEXT_MUTED }}>OTP, contact & visa checker emails</span>
+                  <span style={{ fontSize: 12, color: TEXT_MUTED }}>Gmail / custom SMTP — used when SMTP is the active provider</span>
                 </div>
               </div>
               <AdminToggle enabled={smtp.enabled} onChange={(enabled) => updateSmtp({ enabled })} color="#22c55e" />
@@ -530,84 +540,67 @@ export default function AdminSettings() {
               </div>
             </div>
             {smtp.configured && (
-              <p style={{ fontSize: 11, color: '#166534', margin: '12px 0 0' }}>● SMTP credentials saved — used for sign-in OTP emails</p>
+              <p style={{ fontSize: 11, color: '#166534', margin: '12px 0 0' }}>● SMTP credentials saved</p>
             )}
-            <button type="button" onClick={() => void persistEmailSettings({ smtp })} disabled={emailSaving} style={{ ...primaryBtn, width: '100%', marginTop: 16 }}>
+            <button type="button" onClick={() => void saveSmtpSettings()} disabled={emailSaving} style={{ ...primaryBtn, width: '100%', marginTop: 16 }}>
               {emailSaving ? 'Saving…' : 'Save SMTP'}
             </button>
           </div>
 
-          <div style={{ ...cardStyle, padding: 24 }}>
+          <div style={{ ...cardStyle, padding: 24, border: resend.enabled ? `2px solid ${BRAND}` : cardStyle.border }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 44, height: 44, borderRadius: 12, background: PAGE_BG, border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>✉</div>
-                <span style={{ fontWeight: 700, fontSize: 15 }}>Resend.com</span>
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: 15, display: 'block' }}>Resend.com</span>
+                  <span style={{ fontSize: 12, color: TEXT_MUTED }}>Transactional email API — OTP & notifications</span>
+                </div>
               </div>
               <AdminToggle enabled={resend.enabled} onChange={(enabled) => updateResend({ enabled })} color="#22c55e" />
             </div>
-            <MaskedField label="API Key" value={resend.apiKey} onChange={(apiKey) => setResend((r) => ({ ...r, apiKey }))} />
-            <label style={{ display: 'block', fontSize: 12, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>From Email</label>
-            <input value={resend.fromEmail} onChange={(e) => setResend((r) => ({ ...r, fromEmail: e.target.value }))} style={{ ...inputStyle, width: '100%', marginBottom: 12 }} />
+            <MaskedField label="API Key" value={resend.apiKey} onChange={(apiKey) => setResend((r) => ({ ...r, apiKey }))} placeholder="re_xxxxxxxx" />
+            <p style={{ margin: '0 0 12px', fontSize: 11, color: TEXT_MUTED }}>Copy from <strong>resend.com → API Keys</strong>. Must start with <code>re_</code> — not a website URL.</p>
+            <label style={{ display: 'block', fontSize: 12, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>From Email (must be verified in Resend)</label>
+            <input value={resend.fromEmail} onChange={(e) => setResend((r) => ({ ...r, fromEmail: e.target.value }))} placeholder="onboarding@resend.dev" style={{ ...inputStyle, width: '100%', marginBottom: 8 }} />
+            {resend.fromEmail.trim().toLowerCase() === 'onboarding@resend.dev' && (
+              <p style={{ margin: '0 0 12px', fontSize: 11, color: '#b45309', lineHeight: 1.45 }}>
+                Resend test sender: emails only deliver to the address on your Resend account (not Gmail or other addresses).
+                Verify your domain at resend.com/domains and use e.g. <code>no-reply@yourdomain.com</code> for production.
+              </p>
+            )}
             <label style={{ display: 'block', fontSize: 12, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>From Name</label>
             <input value={resend.fromName} onChange={(e) => setResend((r) => ({ ...r, fromName: e.target.value }))} style={{ ...inputStyle, width: '100%', marginBottom: 16 }} />
-            <button type="button" onClick={() => void persistEmailSettings({ resend })} disabled={emailSaving} style={{ ...outlineBtn, width: '100%' }}>Save Resend</button>
-          </div>
-
-          <div style={{ ...cardStyle, padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: PAGE_BG, border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📧</div>
-                <span style={{ fontWeight: 700, fontSize: 15 }}>SendGrid</span>
-              </div>
-              <AdminToggle enabled={sendgrid.enabled} onChange={(enabled) => updateSendgrid({ enabled })} color="#22c55e" />
-            </div>
-            <MaskedField label="API Key" value={sendgrid.apiKey} onChange={(apiKey) => setSendgrid((s) => ({ ...s, apiKey }))} />
-            <label style={{ display: 'block', fontSize: 12, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>From Email</label>
-            <input value={sendgrid.fromEmail} onChange={(e) => setSendgrid((s) => ({ ...s, fromEmail: e.target.value }))} style={{ ...inputStyle, width: '100%', marginBottom: 12 }} />
-            <label style={{ display: 'block', fontSize: 12, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>From Name</label>
-            <input value={sendgrid.fromName} onChange={(e) => setSendgrid((s) => ({ ...s, fromName: e.target.value }))} style={{ ...inputStyle, width: '100%', marginBottom: 16 }} />
-            <button type="button" onClick={() => void persistEmailSettings({ sendgrid })} disabled={emailSaving} style={{ ...outlineBtn, width: '100%' }}>Save SendGrid</button>
-          </div>
-
-          <div style={{ ...cardStyle, padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#fff5f5', border: `1px solid #fecaca`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: '#ffe01b' }}>M</div>
-                <div>
-                  <span style={{ fontWeight: 700, fontSize: 15, display: 'block' }}>Mailchimp</span>
-                  <span style={{ fontSize: 12, color: TEXT_MUTED }}>Newsletters & marketing</span>
-                </div>
-              </div>
-              <AdminToggle enabled={mailchimp.enabled} onChange={(enabled) => updateMailchimp({ enabled })} color="#22c55e" />
-            </div>
-            <MaskedField label="API Key" value={mailchimp.apiKey} onChange={(apiKey) => setMailchimp((m) => ({ ...m, apiKey }))} placeholder="xxxxxxxx-us1" />
-            <label style={{ display: 'block', fontSize: 12, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>Audience / List ID</label>
-            <input
-              value={mailchimp.audienceId}
-              onChange={(e) => setMailchimp((m) => ({ ...m, audienceId: e.target.value }))}
-              placeholder="e.g. a1b2c3d4e5"
-              style={{ ...inputStyle, width: '100%', marginBottom: 12 }}
-            />
-            <label style={{ display: 'block', fontSize: 12, color: TEXT_SECONDARY, marginBottom: 4, fontWeight: 500 }}>From Email</label>
-            <input
-              value={mailchimp.fromEmail}
-              onChange={(e) => setMailchimp((m) => ({ ...m, fromEmail: e.target.value }))}
-              style={{ ...inputStyle, width: '100%', marginBottom: 16 }}
-            />
-            <button type="button" onClick={saveMailchimp} style={{ ...primaryBtn, width: '100%' }}>Save Mailchimp</button>
+            <button type="button" onClick={() => void saveResendSettings()} disabled={emailSaving} style={{ ...primaryBtn, width: '100%', marginBottom: 8 }}>
+              {emailSaving ? 'Saving…' : 'Save Resend'}
+            </button>
+            {resend.configured && (
+              <p style={{ fontSize: 11, color: '#166534', margin: 0 }}>● Resend API key saved</p>
+            )}
           </div>
 
           <div style={{ ...cardStyle, padding: 24, gridColumn: '1 / -1' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>Send test email</h3>
+            <h3 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 700 }}>Send test email</h3>
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: TEXT_MUTED }}>
+              Only one provider can be active. Enabling SMTP turns Resend off, and vice versa.
+              {resend.enabled && resend.fromEmail.trim().toLowerCase() === 'onboarding@resend.dev' && (
+                <> With <code>onboarding@resend.dev</code>, use your Resend account email as the test recipient.</>
+              )}
+            </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
               <input
                 type="email"
                 value={testEmailTo}
                 onChange={(e) => setTestEmailTo(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="you@gmail.com"
                 style={{ ...inputStyle, minWidth: 240, flex: 1 }}
               />
-              <button type="button" onClick={() => void sendTestEmail('smtp')} disabled={emailSaving} style={primaryBtn}>
+              <button type="button" onClick={() => void sendTestEmail('auto')} disabled={emailSaving} style={primaryBtn}>
+                Send test ({activeEmailProvider === 'none' ? 'active' : activeEmailProvider.toUpperCase()})
+              </button>
+              <button type="button" onClick={() => void sendTestEmail('resend')} disabled={emailSaving || !resend.enabled} style={outlineBtn}>
+                Test Resend
+              </button>
+              <button type="button" onClick={() => void sendTestEmail('smtp')} disabled={emailSaving || !smtp.enabled} style={outlineBtn}>
                 Test SMTP
               </button>
             </div>

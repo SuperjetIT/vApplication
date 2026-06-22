@@ -39,7 +39,10 @@ import AgentApplicationsPage from './pages/agent/AgentApplicationsPage'
 import AgentApplicationDetailPage from './pages/agent/AgentApplicationDetailPage'
 import AgentCommissionsPage from './pages/agent/AgentCommissionsPage'
 import AgentProfilePage from './pages/agent/AgentProfilePage'
+import AgentWalletPage from './pages/agent/AgentWalletPage'
 import AgentRegisterPage from './pages/agent/AgentRegisterPage'
+import UserWalletPage from './pages/UserWalletPage'
+import AdminWalletPage from './pages/admin/AdminWalletPage'
 import { DevToolsPanel } from './components/DevToolsPanel'
 import {
   ADMIN_LOGIN_PATH,
@@ -177,6 +180,10 @@ function AppContent() {
         <Route path={`${AGENT_BASE_PATH}/applications/:id`} element={<AgentGuard><AgentApplicationDetailPage /></AgentGuard>} />
         <Route path={`${AGENT_BASE_PATH}/commissions`} element={<AgentGuard><AgentCommissionsPage /></AgentGuard>} />
         <Route path={`${AGENT_BASE_PATH}/profile`} element={<AgentGuard><AgentProfilePage /></AgentGuard>} />
+        <Route path={`${AGENT_BASE_PATH}/wallet`} element={<AgentGuard><AgentWalletPage /></AgentGuard>} />
+        <Route path="/user/me/wallet" element={<UserWalletPage />} />
+        <Route path="/admin/wallet" element={<AdminGuard><AdminWalletPage /></AdminGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/wallet`} element={<OperationsGuard><AdminWalletPage /></OperationsGuard>} />
         <Route path="/agent/register" element={<AgentRegisterPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

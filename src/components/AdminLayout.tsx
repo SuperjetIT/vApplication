@@ -1,13 +1,14 @@
-import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { BRAND, BRAND_BLUE, PAGE_BG, SIDEBAR_BG, BORDER, SUCCESS, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, cardStyle, inputStyle, primaryBtn, outlineBtn } from './admin/adminTheme'
+import { BRAND, BRAND_BLUE, OPS_PRIMARY, OPS_SECONDARY, PAGE_BG, SIDEBAR_BG, BORDER, SUCCESS, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, cardStyle, inputStyle, primaryBtn, outlineBtn } from './admin/adminTheme'
 import { ADMIN_LOGIN_PATH, AGENT_BASE_PATH, OPERATIONS_BASE_PATH, OPERATIONS_LOGIN_PATH } from '../config/portalRoutes'
 import { clearPortalSession, getPortalRole, getPortalUser, isOperationsPath } from '../utils/portalAuth'
 import './admin/adminResponsive.css'
+import { Database } from '../database/db'
+import { useDatabaseListener } from '../hooks/useDatabase'
 import {
   loadCalendarEvents,
   loadNotes,
-  loadWalletBalances,
   playNotificationSound,
   saveCalendarEvents,
   saveNotes,
@@ -48,7 +49,7 @@ function buildNavSections(basePath: string, isOperations: boolean) {
   const sections = [
     { label: 'Overview', items: [{ path: basePath, label: 'Dashboard' }] },
     { label: 'CRM', items: [{ path: `${basePath}/leads`, label: 'Leads' }, { path: `${basePath}/customers`, label: 'Customers' }, { path: `${basePath}/agents`, label: 'Agents' }] },
-    { label: 'Finance', items: [{ path: `${basePath}/invoices`, label: 'Invoices' }, { path: `${basePath}/payments`, label: 'Payments' }, { path: `${basePath}/expenses`, label: 'Expenses' }, { path: `${basePath}/reports`, label: 'Reports' }] },
+    { label: 'Finance', items: [{ path: `${basePath}/wallet`, label: 'Wallet' }, { path: `${basePath}/invoices`, label: 'Invoices' }, { path: `${basePath}/payments`, label: 'Payments' }, { path: `${basePath}/expenses`, label: 'Expenses' }, { path: `${basePath}/reports`, label: 'Reports' }] },
   ]
   if (!isOperations) {
     sections.push({
@@ -86,7 +87,11 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
   const [events, setEvents] = useState<AdminCalendarEvent[]>(() => loadCalendarEvents())
   const [newNote, setNewNote] = useState('')
   const [newEvent, setNewEvent] = useState({ date: new Date().toISOString().slice(0, 10), title: '', time: '' })
-  const [wallet] = useState(() => loadWalletBalances())
+  const dbVersion = useDatabaseListener()
+  const wallet = useMemo(() => {
+    const stats = Database.getDashboardStats()
+    return { b2b: stats.b2bWalletTotal, b2c: stats.b2cWalletTotal }
+  }, [dbVersion])
   const [soundOn, setSoundOn] = useState(true)
 
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
@@ -165,7 +170,7 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #f93e42, #ff6b6b)', boxShadow: '0 4px 12px rgba(249,62,66,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14 }}>SG</div>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16, color: TEXT_PRIMARY, lineHeight: 1.2 }}>Superjet Global</div>
-                <span style={{ background: isOperations ? '#f0f0ff' : '#fff0f0', color: isOperations ? BRAND_BLUE : BRAND, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{portalLabel}</span>
+                <span style={{ background: isOperations ? '#fff7ed' : '#fff0f0', color: isOperations ? OPS_PRIMARY : BRAND, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{portalLabel}</span>
               </div>
             </div>
           </div>
@@ -199,7 +204,7 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
           <div style={{ margin: 16, borderRadius: 16, background: 'linear-gradient(135deg, #f8f9fc, #f0f4ff)', border: `1px solid ${BORDER}`, padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ position: 'relative' }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', background: isOperations ? 'linear-gradient(135deg, #5057ea, #818cf8)' : 'linear-gradient(135deg, #f93e42, #ff6b6b)', color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isOperations ? '0 4px 12px rgba(80,87,234,0.3)' : '0 4px 12px rgba(249,62,66,0.3)' }}>{userInitials}</div>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: isOperations ? `linear-gradient(135deg, ${OPS_PRIMARY}, ${OPS_SECONDARY})` : 'linear-gradient(135deg, #f93e42, #ff6b6b)', color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isOperations ? '0 4px 12px rgba(249,115,22,0.3)' : '0 4px 12px rgba(249,62,66,0.3)' }}>{userInitials}</div>
                 <span style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, background: SUCCESS, border: '2px solid white', borderRadius: '50%' }} />
               </div>
               <div>
@@ -228,7 +233,7 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
           </div>
           <div className="admin-header-actions">
             <div style={{ display: 'flex', gap: 8 }} className="admin-wallet-pills">
-              <div style={{ background: '#f0f0ff', border: `1px solid #e0e7ff`, borderRadius: 40, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: BRAND_BLUE }}>
+              <div style={{ background: isOperations ? '#fff7ed' : '#f0f0ff', border: `1px solid ${isOperations ? '#fed7aa' : '#e0e7ff'}`, borderRadius: 40, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: isOperations ? OPS_PRIMARY : BRAND_BLUE }}>
                 B2B Wallet: AED {wallet.b2b.toLocaleString()}
               </div>
               <div style={{ background: '#fff0f0', border: `1px solid #fce7e7`, borderRadius: 40, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: BRAND }}>
@@ -255,7 +260,7 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
                   </div>
                   {NOTIFICATIONS.map((n) => (
                     <div key={n.title} style={{ display: 'flex', gap: 12, padding: 16, borderBottom: '1px solid #f5f5f5', alignItems: 'flex-start' }}>
-                      {n.unread && <span style={{ width: 6, height: 6, borderRadius: '50%', background: BRAND_BLUE, marginTop: 8, flexShrink: 0 }} />}
+                      {n.unread && <span style={{ width: 6, height: 6, borderRadius: '50%', background: isOperations ? OPS_PRIMARY : BRAND_BLUE, marginTop: 8, flexShrink: 0 }} />}
                       <div style={{ width: 40, height: 40, borderRadius: '50%', background: n.gradient, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="4" /></svg>
                       </div>
@@ -272,7 +277,7 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
             <span className="admin-header-date" style={{ color: TEXT_SECONDARY, fontSize: 12 }}>{today}</span>
             <div style={{ position: 'relative' }}>
               <button type="button" className="admin-header-profile-btn" onClick={() => { setProfileOpen((o) => !o); setNotifOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, background: PAGE_BG, border: `1px solid ${BORDER}`, borderRadius: 40, padding: '6px 14px 6px 6px', cursor: 'pointer' }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: isOperations ? 'linear-gradient(135deg, #5057ea, #818cf8)' : 'linear-gradient(135deg, #f93e42, #ff6b6b)', color: '#fff', fontWeight: 700, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{userInitials}</div>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: isOperations ? `linear-gradient(135deg, ${OPS_PRIMARY}, ${OPS_SECONDARY})` : 'linear-gradient(135deg, #f93e42, #ff6b6b)', color: '#fff', fontWeight: 700, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{userInitials}</div>
                 <span className="admin-header-profile-name" style={{ fontSize: 12, fontWeight: 600, color: TEXT_PRIMARY }}>{displayName}</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TEXT_MUTED} strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
               </button>

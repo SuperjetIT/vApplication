@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
 import { SiteFooter } from '../components/SiteFooter'
 import { useAuth } from '../context/AuthContext'
+import { Database } from '../database/db'
 import {
   getApplicationsForUser,
   getCountryForApplication,
@@ -117,8 +118,15 @@ export default function UserMePage() {
   const [profileError, setProfileError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const isLoggingOutRef = useRef(false)
-  useDatabaseListener()
+  const dbVersion = useDatabaseListener()
   const applications = user?.email ? getApplicationsForUser(user.email) : []
+  const userId = user?.email
+    ? (localStorage.getItem('current_user_id') ?? Database.getUserByEmail(user.email.trim().toLowerCase())?.id)
+    : null
+  const walletBalance = useMemo(
+    () => (userId ? Database.getUserWalletBalance(String(userId)) : 0),
+    [userId, dbVersion],
+  )
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768)
@@ -171,6 +179,7 @@ export default function UserMePage() {
         avatarInitials={avatarInitials}
         avatarColor={avatarColor}
         showTabs={false}
+        walletBalance={walletBalance}
       />
 
       <div className="user-me-wrap">
@@ -220,6 +229,18 @@ export default function UserMePage() {
                       {profileError}
                     </div>
                   )}
+
+                  <h2 className="user-me-section-title">My Wallet</h2>
+                  <div className="user-me-accent" />
+                  <div style={{ background: 'linear-gradient(135deg, #5057ea, #818cf8)', borderRadius: 16, padding: 24, color: '#fff', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 13, opacity: 0.85 }}>Available Balance</div>
+                      <div style={{ fontSize: 32, fontWeight: 800, marginTop: 4 }}>AED {walletBalance.toLocaleString()}</div>
+                    </div>
+                    <Link to="/user/me/wallet" style={{ background: '#fff', color: '#5057ea', borderRadius: 10, padding: '10px 20px', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+                      Add Money →
+                    </Link>
+                  </div>
 
                   <h2 className="user-me-section-title">Account details</h2>
                   <div className="user-me-accent" />

@@ -4,6 +4,7 @@
       "id": "adm_001",
       "fullName": "Super Admin",
       "email": "admin@superjetglobal.com",
+      "username": "superadmin",
       "password": "demoadminsjt",
       "role": "super_admin",
       "createdAt": "2026-01-01T00:00:00Z"

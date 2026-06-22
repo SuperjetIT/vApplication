@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCitizenship } from '../context/CitizenshipContext'
 import { flagUrl } from '../utils/flags'
 
@@ -89,6 +89,7 @@ export function Navbar({
   profilePhotoUrl,
   showTabs = true,
   showEvents = true,
+  walletBalance,
 }: {
   activeTab?: 'explore' | 'events'
   setActiveTab?: (tab: 'explore' | 'events') => void
@@ -99,7 +100,9 @@ export function Navbar({
   profilePhotoUrl?: string
   showTabs?: boolean
   showEvents?: boolean
+  walletBalance?: number
 }) {
+  const navigate = useNavigate()
   const {
     countryCode,
     citizenship,
@@ -267,6 +270,26 @@ export function Navbar({
             </div>
           )}
         </div>
+
+        {isLoggedIn && walletBalance != null && (
+          <button
+            type="button"
+            onClick={() => navigate('/user/me/wallet')}
+            style={{
+              border: 'none',
+              borderRadius: 20,
+              padding: '6px 14px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              background: '#eef0ff',
+              color: '#5057ea',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            💰 AED {walletBalance.toLocaleString()}
+          </button>
+        )}
 
         <a
           href="https://wa.me/971559641020"
