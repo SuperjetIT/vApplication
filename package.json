@@ -6,12 +6,12 @@
   "scripts": {
     "dev": "concurrently -n api,web -c magenta,cyan \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
-    "dev:server": "node server/index.mjs",
-    "dev:ocr": "python server/ocr_server.py",
+    "dev:server": "node backend/index.mjs",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint frontend",
     "preview": "vite preview",
-    "start:server": "node server/index.mjs"
+    "download:country-images": "node scripts/download-country-images.mjs",
+    "start:server": "node backend/index.mjs"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.6.0",

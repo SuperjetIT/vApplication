@@ -1,0 +1,24 @@
+{
+  "smtp": {
+    "enabled": true,
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "user": "hotel202booking@gmail.com",
+    "pass": "jqdspkhdugzkiwqi",
+    "fromName": "Superjet Visa",
+    "fromEmail": "no-reply@superjetglobal.com",
+    "replyTo": "inquiry@superjetgroup.comAPI_PORT=3001"
+  },
+  "resend": {
+    "enabled": false,
+    "apiKey": "",
+    "fromEmail": "no-reply@superjetglobal.com",
+    "fromName": "Superjet Visa"
+  },
+  "sendgrid": {
+    "enabled": false,
+    "apiKey": "",
+    "fromEmail": "no-reply@superjetglobal.com",
+    "fromName": "Superjet Visa"
+  }
+}

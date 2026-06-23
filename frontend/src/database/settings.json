@@ -1,0 +1,21 @@
+{
+  "integrations": {
+    "stripe": { "enabled": false, "publishableKey": "", "secretKey": "", "testMode": true },
+    "sherpa": { "enabled": false, "apiKey": "", "environment": "sandbox" },
+    "mailchimp": { "enabled": false, "apiKey": "", "audienceId": "", "fromEmail": "no-reply@superjetglobal.com" },
+    "whatsapp": { "enabled": false, "phoneNumberId": "", "accessToken": "" },
+    "tesseractOcr": { "enabled": true, "autoFill": true },
+    "passportOcrApi": {
+      "enabled": true,
+      "apiKey": "",
+      "autoFill": true
+    }
+  },
+  "company": {
+    "name": "Superjet Visa",
+    "address": "Office 206, Fifty One @ Business Bay, Marasi Drive, Business Bay, Dubai, United Arab Emirates",
+    "email": "inquiry@superjetgroup.com",
+    "phone": "+97143399779",
+    "whatsapp": "+971559641020"
+  }
+}
