@@ -7,6 +7,9 @@ export const OPERATIONS_LOGIN_PATH = '/portal/sv-ops-11k9m2x'
 /** B2B partner sign-in */
 export const AGENT_LOGIN_PATH = '/agent/login'
 
+/** B2B partner registration */
+export const AGENT_REGISTER_PATH = '/agent/register'
+
 export const ADMIN_BASE_PATH = '/admin'
 export const OPERATIONS_BASE_PATH = '/operations'
 export const AGENT_BASE_PATH = '/agent'

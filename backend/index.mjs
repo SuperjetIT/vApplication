@@ -2,7 +2,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
 import { createRequire } from 'module'
-import { getUserByEmail, upsertUser } from './users.mjs'
+import { deleteUserById, getUserByEmail, listUsers, recordUserSession, syncUserFromClient, upsertUser } from './users.mjs'
 import {
   getActiveEmailProvider,
   getResolvedSmtpConfig,
@@ -10,6 +10,8 @@ import {
   saveEmailSettings,
   toAdminPayload,
 } from './emailSettings.mjs'
+import { createPartner, deletePartnerById, listPartners, authenticatePartner, updatePartner } from './partners.mjs'
+import { listApplications, syncApplicationFromClient } from './applications.mjs'
 import {
   EmailNotConfiguredError,
   getMailIdentity,
@@ -166,6 +168,167 @@ app.get('/api/health', (_req, res) => {
     emailConfigured: isEmailConfigured(),
     activeEmailProvider: getActiveEmailProvider(),
   })
+})
+
+app.get('/api/partners', (_req, res) => {
+  res.json({ ok: true, partners: listPartners() })
+})
+
+app.get('/api/users', (_req, res) => {
+  res.json({ ok: true, users: listUsers() })
+})
+
+app.post('/api/users/sync', (req, res) => {
+  try {
+    const body = req.body ?? {}
+    const email = String(body.email ?? '').trim().toLowerCase()
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ ok: false, error: 'Invalid email address.' })
+    }
+    const { user, isNew } = syncUserFromClient(body)
+    return res.json({ ok: true, user, isNew })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not sync user.'
+    return res.status(400).json({ ok: false, error: message })
+  }
+})
+
+app.delete('/api/users/:id', (req, res) => {
+  const deleted = deleteUserById(req.params.id)
+  if (!deleted) {
+    return res.status(404).json({ ok: false, error: 'User not found.' })
+  }
+  return res.json({ ok: true })
+})
+
+app.get('/api/applications', (_req, res) => {
+  res.json({ ok: true, applications: listApplications() })
+})
+
+app.post('/api/applications/sync', (req, res) => {
+  try {
+    const body = req.body ?? {}
+    const id = String(body.id ?? '').trim()
+    if (!id) {
+      return res.status(400).json({ ok: false, error: 'Application id is required.' })
+    }
+    const { application, isNew } = syncApplicationFromClient(body)
+    return res.json({ ok: true, application, isNew })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not sync application.'
+    return res.status(400).json({ ok: false, error: message })
+  }
+})
+
+app.post('/api/partners/login', (req, res) => {
+  const email = String(req.body?.email ?? '').trim().toLowerCase()
+  const password = String(req.body?.password ?? '')
+  if (!email || !password) {
+    return res.status(400).json({ ok: false, error: 'Email and password are required.' })
+  }
+  const result = authenticatePartner(email, password)
+  if (!result.ok) {
+    if (result.error === 'PENDING_APPROVAL') {
+      return res.status(403).json({ ok: false, error: 'Your account is pending approval.' })
+    }
+    return res.status(401).json({ ok: false, error: 'Invalid credentials.' })
+  }
+  return res.json({ ok: true, partner: result.partner })
+})
+
+app.patch('/api/partners/:id', (req, res) => {
+  try {
+    const id = String(req.params.id ?? '').trim()
+    const body = req.body ?? {}
+    const partner = updatePartner(id, body)
+    return res.json({ ok: true, partner })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not update partner.'
+    if (message === 'PARTNER_NOT_FOUND') {
+      return res.status(404).json({ ok: false, error: 'Partner not found.' })
+    }
+    return res.status(400).json({ ok: false, error: message })
+  }
+})
+
+app.delete('/api/partners/:id', (req, res) => {
+  const deleted = deletePartnerById(req.params.id)
+  if (!deleted) {
+    return res.status(404).json({ ok: false, error: 'Partner not found.' })
+  }
+  return res.json({ ok: true })
+})
+
+app.post('/api/partners/admin', (req, res) => {
+  try {
+    const body = req.body ?? {}
+    const companyName = String(body.companyName ?? '').trim()
+    const contactPerson = String(body.contactPerson ?? '').trim()
+    const email = String(body.email ?? '').trim().toLowerCase()
+    const password = String(body.password ?? '')
+
+    if (!companyName || !contactPerson || !email || !password) {
+      return res.status(400).json({ ok: false, error: 'Please fill in all required fields.' })
+    }
+
+    const partner = createPartner({
+      companyName,
+      contactPerson,
+      email,
+      username: email,
+      phone: String(body.phone ?? '').trim(),
+      tradeLicence: String(body.tradeLicence ?? '').trim(),
+      password,
+      commissionRate: Number(body.commissionRate ?? 15) || 15,
+      status: String(body.status ?? 'active'),
+      registrationSource: 'admin',
+    })
+
+    return res.status(201).json({ ok: true, partner })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not create partner.'
+    if (message === 'PARTNER_EXISTS') {
+      return res.status(409).json({ ok: false, error: 'A partner with this email already exists.' })
+    }
+    return res.status(500).json({ ok: false, error: message })
+  }
+})
+
+app.post('/api/partners/register', (req, res) => {
+  try {
+    const body = req.body ?? {}
+    const companyName = String(body.companyName ?? '').trim()
+    const contactPerson = String(body.contactPerson ?? '').trim()
+    const email = String(body.email ?? '').trim().toLowerCase()
+
+    if (!companyName || !contactPerson || !email) {
+      return res.status(400).json({ ok: false, error: 'Please fill in all required fields.' })
+    }
+
+    const partner = createPartner({
+      companyName,
+      contactPerson,
+      email,
+      username: email,
+      phone: String(body.phone ?? '').trim(),
+      tradeLicence: String(body.tradeLicence ?? '').trim(),
+      password: String(body.password ?? ''),
+      commissionRate: 0,
+      status: 'pending',
+      registrationSource: 'self_service',
+      registrationMethod: 'self_registered',
+      countriesSold: Array.isArray(body.countriesSold) ? body.countriesSold : [],
+    })
+
+    return res.status(201).json({ ok: true, partner })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Registration failed'
+    if (message === 'PARTNER_EXISTS') {
+      return res.status(409).json({ ok: false, error: 'A partner with this email already exists.' })
+    }
+    console.error('Partner register error:', err)
+    return res.status(500).json({ ok: false, error: 'Could not save partner registration.' })
+  }
 })
 
 app.get('/api/admin/email/settings', (_req, res) => {
@@ -402,8 +565,18 @@ app.post('/api/auth/verify-otp', (req, res) => {
   }
 
   otpStore.delete(email)
-  const user = getUserByEmail(email)
-  return res.json({ success: true, user })
+  const { user } = recordUserSession(email, { source: 'sign_in' })
+  return res.json({
+    success: true,
+    user: {
+      email: user.email,
+      fullName: String(user.fullName ?? '').trim(),
+      id: user.id,
+      lastLogin: user.lastLogin,
+      loginCount: user.loginCount,
+      registrationSource: user.registrationSource,
+    },
+  })
 })
 
 app.get('/api/user/me', (req, res) => {

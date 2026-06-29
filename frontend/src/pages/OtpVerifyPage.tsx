@@ -1,21 +1,20 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ClipboardEvent,
-  type FormEvent,
-  type KeyboardEvent,
-} from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
+import { OtpVerification } from '../components/OtpVerification'
 import { SiteFooter } from '../components/SiteFooter'
 import { useAuth } from '../context/AuthContext'
-import { consumeRedirectUrl } from '../utils/authGate'
+import { useCitizenship } from '../context/CitizenshipContext'
+import { Database } from '../database/db'
+import { consumeRedirectUrl, peekRedirectUrl } from '../utils/authGate'
+import {
+  clearLoginAttempts,
+  formatLockoutRemaining,
+  getLoginLockState,
+  recordFailedLogin,
+} from '../utils/adminLoginSecurity'
 import './SignInPage.css'
-
-const OTP_LENGTH = 6
-const COUNTDOWN_START = 59
+import './OtpVerifyPage.css'
 
 function maskEmail(email: string) {
   const [local, domain] = email.split('@')
@@ -27,20 +26,17 @@ function maskEmail(email: string) {
 export default function OtpVerifyPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { verifyOtp, loginWithEmail, sendOtp, getPendingOtpEmail, updateProfile } = useAuth()
+  const { verifyOtp, sendOtp, getPendingOtpEmail, loginWithEmail } = useAuth()
+  const { citizenship, residenceCountry, residencyStatus } = useCitizenship()
 
   const locationState = location.state as { email?: string; fullName?: string } | null
   const emailFromState = locationState?.email
   const fullNameFromState = locationState?.fullName
   const [email] = useState(() => emailFromState ?? getPendingOtpEmail() ?? '')
-  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''))
-  const [countdown, setCountdown] = useState(COUNTDOWN_START)
-  const [canResend, setCanResend] = useState(false)
   const [loading, setLoading] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768)
@@ -55,42 +51,87 @@ export default function OtpVerifyPage() {
   }, [email, navigate])
 
   useEffect(() => {
-    if (canResend) return
-    if (countdown <= 0) {
-      setCanResend(true)
-      return
+    const lock = getLoginLockState()
+    if (lock.locked) {
+      setMessage({
+        type: 'error',
+        text: `Account locked. Try again in ${formatLockoutRemaining(lock.remainingMs)}.`,
+      })
     }
-    const t = window.setTimeout(() => setCountdown((c) => c - 1), 1000)
-    return () => clearTimeout(t)
-  }, [countdown, canResend])
-
-  const otpCode = digits.join('')
+  }, [])
 
   const handleVerify = useCallback(
-    async (e?: FormEvent) => {
-      e?.preventDefault()
+    async (otpCode: string) => {
       setMessage(null)
-      if (otpCode.length !== OTP_LENGTH) {
-        setMessage({ type: 'error', text: 'Please enter the full 6-digit code.' })
+      const lockState = getLoginLockState()
+      if (lockState.locked) {
+        setMessage({
+          type: 'error',
+          text: `Account locked. Try again in ${formatLockoutRemaining(lockState.remainingMs)}.`,
+        })
         return
       }
       setLoading(true)
       try {
         const result = await verifyOtp(email, otpCode)
         if (!result.ok) {
-          setMessage({
-            type: 'error',
-            text: result.error ?? 'Invalid or expired code. Try again or resend OTP.',
-          })
+          const attempt = recordFailedLogin()
+          if (attempt.locked) {
+            setMessage({
+              type: 'error',
+              text: `Too many failed attempts. Please wait ${formatLockoutRemaining(attempt.remainingMs)}.`,
+            })
+          } else {
+            setMessage({
+              type: 'error',
+              text: result.error ?? 'Invalid or expired code. Try again or resend.',
+            })
+          }
           return
         }
-        await loginWithEmail(email, result.user)
-        if (fullNameFromState?.trim()) {
-          await updateProfile(fullNameFromState.trim())
+
+        clearLoginAttempts()
+        const normalizedEmail = email.trim().toLowerCase()
+        const existingUser = Database.getUserByEmail(normalizedEmail)
+
+        if (!existingUser) {
+          Database.createUser({
+            fullName: fullNameFromState?.trim() || result.user?.fullName || '',
+            email: normalizedEmail,
+            phone: '',
+            phoneCode: '+971',
+            passportCountry: citizenship || '',
+            residenceCountry: residenceCountry || '',
+            residencyStatus: residencyStatus || 'Resident',
+            isVerified: true,
+            registrationMethod: 'passwordless',
+            registrationSource: 'sign_in',
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString(),
+            walletBalance: 0,
+          })
+          Database.logActivity(
+            'b2c_user_registered',
+            `New B2C user registered (passwordless) — ${normalizedEmail}`,
+            undefined,
+            String(Database.getUserByEmail(normalizedEmail)?.id ?? ''),
+            'customer',
+          )
+        } else {
+          Database.updateUser(String(existingUser.id), {
+            lastLogin: new Date().toISOString(),
+            isVerified: true,
+            ...(fullNameFromState?.trim() ? { fullName: fullNameFromState.trim() } : {}),
+          })
         }
-        setMessage({ type: 'success', text: 'Signed in successfully. Redirecting…' })
-        const redirectUrl = consumeRedirectUrl()
-        window.setTimeout(() => navigate(redirectUrl ?? '/user/me', { replace: true }), 600)
+
+        await loginWithEmail(normalizedEmail, result.user, result.serverMeta)
+
+        setMessage({ type: 'success', text: 'Verified! Taking you to your account…' })
+        const redirectUrl = peekRedirectUrl()
+        window.setTimeout(() => {
+          navigate(redirectUrl ? consumeRedirectUrl()! : '/user/me', { replace: true })
+        }, 700)
       } catch (err) {
         setMessage({
           type: 'error',
@@ -100,152 +141,53 @@ export default function OtpVerifyPage() {
         setLoading(false)
       }
     },
-    [otpCode, email, verifyOtp, loginWithEmail, updateProfile, fullNameFromState, navigate],
+    [email, verifyOtp, loginWithEmail, fullNameFromState, navigate, citizenship, residenceCountry, residencyStatus],
   )
 
-  const handleResend = async () => {
+  const handleResend = useCallback(async () => {
     setMessage(null)
     setResendLoading(true)
     try {
       await sendOtp(email)
-      setDigits(Array(OTP_LENGTH).fill(''))
-      inputRefs.current[0]?.focus()
-      setCountdown(COUNTDOWN_START)
-      setCanResend(false)
-      setMessage({ type: 'success', text: 'A new 6-digit code has been sent to your email.' })
+      setMessage({ type: 'success', text: 'A fresh 6-digit code was sent to your email.' })
     } catch (err) {
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Could not resend OTP. Please try again.',
+        text: err instanceof Error ? err.message : 'Could not resend code. Please try again.',
       })
     } finally {
       setResendLoading(false)
     }
-  }
-
-  const setDigit = (index: number, value: string) => {
-    const v = value.replace(/\D/g, '').slice(-1)
-    const next = [...digits]
-    next[index] = v
-    setDigits(next)
-    if (v && index < OTP_LENGTH - 1) {
-      inputRefs.current[index + 1]?.focus()
-    }
-  }
-
-  const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus()
-    }
-    if (e.key === 'Enter' && otpCode.length === OTP_LENGTH) {
-      void handleVerify()
-    }
-  }
-
-  const handlePaste = (e: ClipboardEvent) => {
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH)
-    if (!pasted) return
-    e.preventDefault()
-    const next = Array(OTP_LENGTH).fill('')
-    pasted.split('').forEach((ch, i) => {
-      next[i] = ch
-    })
-    setDigits(next)
-    const focusIdx = Math.min(pasted.length, OTP_LENGTH - 1)
-    inputRefs.current[focusIdx]?.focus()
-  }
+  }, [email, sendOtp])
 
   if (!email) return null
 
   return (
     <div className="signin-shell signin-verify-shell">
-      <Navbar
-        activeTab="explore"
-        setActiveTab={() => {}}
-        isMobile={isMobile}
-        showEvents={false}
-      />
+      <Navbar activeTab="explore" setActiveTab={() => {}} isMobile={isMobile} />
 
-      <main className="signin-page signin-page--gradient">
-        <div className="signin-layout">
-          <section className="signin-card" aria-labelledby="otp-title">
-          <div className="signin-card__mobile-brand">
+      <main className="signin-page signin-page--gradient otp-v2-page">
+        <div className="otp-v2-blob otp-v2-blob--1" aria-hidden />
+        <div className="otp-v2-blob otp-v2-blob--2" aria-hidden />
+
+        <div className="otp-v2-layout">
+          <div className="signin-card__mobile-brand" style={{ justifyContent: 'center', marginBottom: 20 }}>
             <span className="signin-brand__logo">Superjet Global</span>
           </div>
-          <p className="signin-kicker">Verify your email</p>
-          <h1 id="otp-title">Enter OTP</h1>
-          <p className="signin-subtitle">
-            We sent a 6-digit code to <strong>{maskEmail(email)}</strong>
-          </p>
 
-          {message && (
-            <div
-              className={`signin-alert signin-alert--${message.type}`}
-              role="alert"
-              aria-live="polite"
-            >
-              {message.text}
-            </div>
-          )}
-
-          <form className="signin-form" onSubmit={handleVerify}>
-            <div className="otp-inputs" onPaste={handlePaste}>
-              {digits.map((d, i) => (
-                <input
-                  key={i}
-                  ref={(el) => {
-                    inputRefs.current[i] = el
-                  }}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete={i === 0 ? 'one-time-code' : 'off'}
-                  maxLength={1}
-                  value={d}
-                  aria-label={`Digit ${i + 1}`}
-                  className="otp-input"
-                  disabled={loading}
-                  onChange={(e) => setDigit(i, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(i, e)}
-                  autoFocus={i === 0}
-                />
-              ))}
-            </div>
-
-            <p className="otp-countdown" aria-live="polite">
-              {canResend ? (
-                <button
-                  type="button"
-                  className="otp-resend"
-                  onClick={handleResend}
-                  disabled={resendLoading}
-                >
-                  {resendLoading ? 'Sending…' : 'Resend OTP'}
-                </button>
-              ) : (
-                <>
-                  Resend available in <strong>{countdown}</strong>s
-                </>
-              )}
-            </p>
-
-            <button type="submit" className="signin-submit" disabled={loading || otpCode.length !== OTP_LENGTH}>
-              {loading ? (
-                <span className="signin-submit__inner">
-                  <span className="signin-spinner" aria-hidden />
-                  Verifying…
-                </span>
-              ) : (
-                'Verify & Sign In'
-              )}
-            </button>
-          </form>
-
-          <p className="signin-footer-link">
-            <Link to="/sign-in">← Use a different email</Link>
-          </p>
-        </section>
+          <OtpVerification
+            maskedEmail={maskEmail(email)}
+            loading={loading}
+            resendLoading={resendLoading}
+            message={message}
+            onVerify={handleVerify}
+            onResend={handleResend}
+            autoSubmit
+            footer={<Link to="/sign-in">← Use a different email</Link>}
+          />
         </div>
       </main>
+
       <SiteFooter isMobile={isMobile} />
     </div>
   )

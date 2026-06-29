@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { ChevronIcon, ExploreIcon, EventsIcon, HomeIcon, ProfileIcon } from './icons'
+import { ChevronIcon, ExploreIcon, HomeIcon, ProfileIcon } from './icons'
 import { flagUrl } from '../utils/flags'
 import { SiteFooter } from './SiteFooter'
 import './SiteLayout.css'
@@ -35,11 +35,6 @@ export function SiteLayout({
               <ExploreIcon />
               Explore
             </Link>
-            <span className="header-tabs__divider" aria-hidden />
-            <button type="button" className="header-tabs__item">
-              <EventsIcon />
-              Events
-            </button>
           </nav>
 
           <div className="header-actions">

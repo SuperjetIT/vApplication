@@ -6,6 +6,7 @@ import { BRAND, BRAND_BLUE, BORDER, cardStyle, hoverCardProps, inputStyle, outli
 import { Database } from '../../database/db'
 import { scanPassport } from '../../utils/passportOCR'
 import { scanPassportViaApi } from '../../utils/passportOcrApi'
+import { maskApiKey } from '../../utils/sanitizeInput'
 
 const TABS = [
   { key: 'gateways', label: 'Payment Gateways' },
@@ -87,7 +88,8 @@ function MaskedField({
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           type={revealed ? 'text' : 'password'}
-          value={value}
+          value={revealed || !value ? value : maskApiKey(value)}
+          onFocus={() => setRevealed(true)}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           style={{ ...inputStyle, flex: 1 }}

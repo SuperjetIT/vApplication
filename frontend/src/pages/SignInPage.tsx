@@ -8,6 +8,12 @@ import {
   consumeRedirectUrl,
   peekRedirectUrl,
 } from '../utils/authGate'
+import {
+  clearLoginAttempts,
+  formatLockoutRemaining,
+  getLoginLockState,
+  recordFailedLogin,
+} from '../utils/adminLoginSecurity'
 import './SignInPage.css'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -42,6 +48,18 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [locked, setLocked] = useState(false)
+
+  useEffect(() => {
+    const lock = getLoginLockState()
+    setLocked(lock.locked)
+    if (lock.locked) {
+      setMessage({
+        type: 'error',
+        text: `Account locked. Try again in ${formatLockoutRemaining(lock.remainingMs)}.`,
+      })
+    }
+  }, [])
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -67,6 +85,14 @@ export default function SignInPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setMessage(null)
+    const lockState = getLoginLockState()
+    if (lockState.locked) {
+      setMessage({
+        type: 'error',
+        text: `Account locked. Try again in ${formatLockoutRemaining(lockState.remainingMs)}.`,
+      })
+      return
+    }
     const trimmed = email.trim().toLowerCase()
     if (!trimmed) {
       setMessage({ type: 'error', text: 'Please enter your email address.' })
@@ -79,18 +105,28 @@ export default function SignInPage() {
     setLoading(true)
     try {
       await sendOtp(trimmed)
+      clearLoginAttempts()
       setMessage({ type: 'success', text: '6-digit OTP sent! Check your inbox.' })
       window.setTimeout(() => {
         navigate('/sign-in/verify', { state: { email: trimmed } })
       }, 400)
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text:
-          err instanceof Error
-            ? err.message
-            : 'Something went wrong. Please try again.',
-      })
+      const attempt = recordFailedLogin()
+      if (attempt.locked) {
+        setLocked(true)
+        setMessage({
+          type: 'error',
+          text: `Too many failed attempts. Please wait ${formatLockoutRemaining(attempt.remainingMs)}.`,
+        })
+      } else {
+        setMessage({
+          type: 'error',
+          text:
+            err instanceof Error
+              ? err.message
+              : 'Something went wrong. Please try again.',
+        })
+      }
       setLoading(false)
     }
   }
@@ -101,7 +137,6 @@ export default function SignInPage() {
         activeTab="explore"
         setActiveTab={() => {}}
         isMobile={isMobile}
-        showEvents={false}
       />
 
       <main className="signin-page signin-page--gradient">
@@ -162,13 +197,13 @@ export default function SignInPage() {
                     autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading}
+                    disabled={loading || locked}
                     required
                   />
                 </div>
               </label>
 
-              <button type="submit" className="signin-submit" disabled={loading}>
+              <button type="submit" className="signin-submit" disabled={loading || locked}>
                 {loading ? (
                   <span className="signin-submit__inner">
                     <span className="signin-spinner" aria-hidden />

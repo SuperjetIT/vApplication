@@ -39,7 +39,6 @@ const popularDestinations: PopularDestination[] = [
 ]
 
 const WHATSAPP_EXPERT = '971559641020'
-const PARTNER_EMAIL = 'procurement@superjetgroup.com'
 const VISA_REQUIREMENTS_PATH = '/tools/visa-requirements/dubai-visa'
 
 type DeliveryFilter = 'any' | ProcessingCategory
@@ -1124,6 +1123,8 @@ export default function HomePage() {
   const { isLoggedIn, avatarInitials, avatarColor } = useAuth()
   const {
     countryCode,
+    citizenship,
+    citizenshipCode,
     hasSavedCitizenship,
     setCitizenship,
     openCitizenshipModal,
@@ -1131,7 +1132,7 @@ export default function HomePage() {
   } = useCitizenship()
   const [ipToast, setIpToast] = useState<IpToast | null>(null)
   const [search, setSearch] = useState('')
-  const [activeTab, setActiveTab] = useState<'explore' | 'events'>('explore')
+  const [activeTab, setActiveTab] = useState<'explore'>('explore')
   const [openDropdown, setOpenDropdown] = useState<OpenDropdown>(null)
   const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>('any')
   const [typeFilter, setTypeFilter] = useState<TypeFilterValue>('all')
@@ -1258,11 +1259,42 @@ export default function HomePage() {
     documentOptions.find((o) => o.value === documentsFilter)?.label ?? 'Any Documents'
   const holidayLabel = holidayDate ? formatHolidayDate(holidayDate) : 'Select Dates'
 
+  const passportSlugs: Record<string, string[]> = {
+    India: ['india'],
+    UAE: ['uae'],
+    'United Arab Emirates': ['uae'],
+    'United Kingdom': ['uk'],
+    USA: ['united-states'],
+    'United States': ['united-states'],
+    Pakistan: ['pakistan'],
+    Philippines: ['philippines'],
+    Kenya: ['kenya'],
+    Malaysia: ['malaysia'],
+    Egypt: ['egypt'],
+    Indonesia: ['indonesia'],
+    Thailand: ['thailand'],
+    Vietnam: ['vietnam'],
+    Canada: ['canada'],
+    Australia: ['australia'],
+    'Saudi Arabia': ['saudi-arabia'],
+    Singapore: ['singapore'],
+    Brazil: ['brazil'],
+    'South Korea': ['south-korea'],
+    Japan: ['japan'],
+    France: ['france'],
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const slugsToHide = passportSlugs[citizenship] || []
     return countries.filter((c) => {
       const matchesSearch = !q || c.name.toLowerCase().includes(q)
+      const notOwnCountry =
+        c.name.toLowerCase() !== citizenship.toLowerCase() &&
+        c.countryCode.toLowerCase() !== citizenshipCode.toLowerCase() &&
+        !slugsToHide.includes(c.slug)
       return (
+        notOwnCountry &&
         matchesSearch &&
         matchesDelivery(c, deliveryFilter) &&
         matchesType(c, typeFilter) &&
@@ -1270,7 +1302,7 @@ export default function HomePage() {
         matchesHoliday(c, holidayDate)
       )
     })
-  }, [search, deliveryFilter, typeFilter, documentsFilter, holidayDate])
+  }, [search, deliveryFilter, typeFilter, documentsFilter, holidayDate, citizenship, citizenshipCode])
 
   const scrollToVisaTools = () => {
     filterBarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -1680,7 +1712,7 @@ export default function HomePage() {
               <HeroCtaButton
                 icon={<HandshakeIcon />}
                 label="Become Agent Partner"
-                href={`mailto:${PARTNER_EMAIL}?subject=${encodeURIComponent('Agent Partnership Inquiry')}`}
+                to="/agent/register"
               />
               <HeroCtaButton
                 icon={<UploadIcon />}
@@ -2351,7 +2383,7 @@ export default function HomePage() {
                     <SectionCta
                       primary
                       label="Become an Agent Partner"
-                      href={`mailto:${PARTNER_EMAIL}?subject=${encodeURIComponent('Agent Partnership Application')}`}
+                      to="/agent/register"
                     />
                     <SectionCta label="Contact Partnership Team" to="/contact" />
                   </div>

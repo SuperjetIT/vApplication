@@ -596,6 +596,7 @@ export default function VisaPage() {
   const {
     citizenship,
     countryCode,
+    citizenshipCode,
     residenceCountry,
     residenceCode,
     residencyStatus,
@@ -674,7 +675,7 @@ export default function VisaPage() {
       },
       {
         q: 'What if my visa is rejected?',
-        a: 'With Super Protect, rejected applications qualify for a 100% refund of Superjet Global fees per our policy.',
+        a: 'With Super Protect, our team reviews rejection reasons, advises on next steps, and explains any eligible support under our policy.',
       },
       {
         q: 'Is my payment secure?',
@@ -710,6 +711,36 @@ export default function VisaPage() {
 
   if (!selectedOption) return null
 
+  const passportSlugs: Record<string, string[]> = {
+    India: ['india'],
+    UAE: ['uae'],
+    'United Arab Emirates': ['uae'],
+    'United Kingdom': ['uk'],
+    USA: ['united-states'],
+    'United States': ['united-states'],
+    Pakistan: ['pakistan'],
+    Philippines: ['philippines'],
+    Kenya: ['kenya'],
+    Malaysia: ['malaysia'],
+    Egypt: ['egypt'],
+    Indonesia: ['indonesia'],
+    Thailand: ['thailand'],
+    Vietnam: ['vietnam'],
+    Canada: ['canada'],
+    Australia: ['australia'],
+    'Saudi Arabia': ['saudi-arabia'],
+    Singapore: ['singapore'],
+    Brazil: ['brazil'],
+    'South Korea': ['south-korea'],
+    Japan: ['japan'],
+    France: ['france'],
+  }
+  const slugsToHide = passportSlugs[citizenship] || []
+  const isOwnCountry =
+    country.name.toLowerCase() === citizenship.toLowerCase() ||
+    country.countryCode.toLowerCase() === citizenshipCode.toLowerCase() ||
+    slugsToHide.includes(country.slug)
+
   const buildApplyUrl = (optionId: string) =>
     `/apply?destination=${encodeURIComponent(country.slug)}&option=${encodeURIComponent(optionId)}&step=personal`
 
@@ -734,7 +765,7 @@ export default function VisaPage() {
     handleApplyAttempt(otherOption.id)
   }
 
-  const paymentBox = (
+  const paymentBox = isOwnCountry ? null : (
     <PaymentBox
       country={country}
       selectedOptionId={selectedOptionId}
@@ -756,6 +787,24 @@ export default function VisaPage() {
 
   const leftContent = (
     <div style={{ paddingTop: 32, paddingRight: isMobile ? 0 : 32 }}>
+      {isOwnCountry && (
+        <div
+          style={{
+            background: '#f0fff4',
+            border: '1px solid #bbf7d0',
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 24,
+          }}
+        >
+          <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#166534', fontSize: 15 }}>
+            ✅ As a {citizenship} passport holder, you don&apos;t need a visa to enter {country.name}.
+          </p>
+          <p style={{ margin: 0, color: '#166534', fontSize: 14 }}>
+            You can travel freely — no application required.
+          </p>
+        </div>
+      )}
       <section>
         <SectionHeading title={`${country.name} Visa Information`} />
         <div
@@ -1315,7 +1364,6 @@ export default function VisaPage() {
         isLoggedIn={isLoggedIn}
         avatarInitials={avatarInitials}
         avatarColor={avatarColor}
-        showEvents={false}
       />
 
       {/* Hero */}

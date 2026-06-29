@@ -1,5 +1,6 @@
 import { Database } from '../database/db'
 import type { AdminLead, LeadStatus } from '../types/adminTypes'
+import { syncApplicationToServer } from './applicationSync'
 import { getLeadById, loadLeads } from './leadsStore'
 import { leadStatusToDbStatus } from './dbMappers'
 
@@ -7,7 +8,8 @@ export { getLeadById, loadLeads }
 
 export function updateLeadStatus(leadId: string, status: LeadStatus, operatorId?: string): AdminLead | undefined {
   const dbStatus = leadStatusToDbStatus(status)
-  Database.updateApplicationStatus(leadId, dbStatus, `Status changed to ${status}`, operatorId)
+  const updated = Database.updateApplicationStatus(leadId, dbStatus, `Status changed to ${status}`, operatorId)
+  if (updated) void syncApplicationToServer(updated as Record<string, unknown>)
 
   if (status === 'Approved') {
     const app = Database.getApplicationById(leadId)

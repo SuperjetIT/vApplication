@@ -184,7 +184,7 @@ export default function VisaRequirementsPage() {
   const { isLoggedIn, avatarInitials, avatarColor } = useAuth()
   const { countryCode, openCitizenshipModal } = useCitizenship()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  const [activeTab, setActiveTab] = useState<'explore' | 'events'>('explore')
+  const [activeTab, setActiveTab] = useState<'explore'>('explore')
   const [purpose, setPurpose] = useState<VisaPurpose>('tourism')
   const [passportCode, setPassportCode] = useState(countryCode || 'in')
   const [destinationSlug, setDestinationSlug] = useState(() => normalizeDestinationSlug(routeSlug))

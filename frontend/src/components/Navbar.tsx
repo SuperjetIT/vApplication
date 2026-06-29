@@ -30,20 +30,6 @@ function PassportSvg({ active }: { active?: boolean }) {
   )
 }
 
-function TicketSvg({ active }: { active?: boolean }) {
-  const c = active ? BRAND : '#9ca3af'
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 9a2 2 0 012-2h1v2H6v2h1a2 2 0 01-2 2v1H4V9zm16 0v5h-1v-1a2 2 0 00-2-2h-1v-2h1a2 2 0 012-2h1V9zM8 7h8v10H8V7z"
-        stroke={c}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 function WhatsAppSvg() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden>
@@ -89,18 +75,16 @@ export function Navbar({
   avatarColor,
   profilePhotoUrl,
   showTabs = true,
-  showEvents = true,
   walletBalance,
 }: {
-  activeTab?: 'explore' | 'events'
-  setActiveTab?: (tab: 'explore' | 'events') => void
+  activeTab?: 'explore'
+  setActiveTab?: (tab: 'explore') => void
   isMobile: boolean
   isLoggedIn?: boolean
   avatarInitials?: string
   avatarColor?: string
   profilePhotoUrl?: string
   showTabs?: boolean
-  showEvents?: boolean
   walletBalance?: number
 }) {
   const navigate = useNavigate()
@@ -178,17 +162,11 @@ export function Navbar({
       </Link>
 
       {tabsVisible && setActiveTab && (
-        <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
+        <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <button type="button" onClick={() => setActiveTab('explore')} style={tabStyle(activeTab === 'explore')}>
             <PassportSvg active={activeTab === 'explore'} />
             Explore
           </button>
-          {showEvents && setActiveTab && (
-            <button type="button" onClick={() => setActiveTab('events')} style={tabStyle(activeTab === 'events')}>
-              <TicketSvg active={activeTab === 'events'} />
-              Events
-            </button>
-          )}
         </nav>
       )}
 

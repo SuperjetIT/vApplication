@@ -124,7 +124,7 @@ export default function AgentVisaPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const applyPath = `${AGENT_BASE_PATH}/apply?destination=${country.slug}&option=${encodeURIComponent(pricing.opt.label)}`
+                  const applyPath = `${AGENT_BASE_PATH}/apply?destination=${country.slug}&option=${encodeURIComponent(pricing.opt.id)}`
                   if (!isAgentLoggedIn()) {
                     navigate('/agent/login')
                     return

@@ -9,7 +9,7 @@ import {
   getCountryForApplication,
 } from '../utils/applications'
 import { useDatabaseListener } from '../hooks/useDatabase'
-import { clearRedirectUrl, peekRedirectUrl } from '../utils/authGate'
+import { clearRedirectUrl, peekRedirectUrl, USER_REF_KEY } from '../utils/authGate'
 import { readProfileImageFile } from '../utils/profilePhoto'
 import './UserMePage.css'
 
@@ -206,7 +206,7 @@ export default function UserMePage() {
   const dbVersion = useDatabaseListener()
   const applications = user?.email ? getApplicationsForUser(user.email) : []
   const userId = user?.email
-    ? (localStorage.getItem('current_user_id') ?? Database.getUserByEmail(user.email.trim().toLowerCase())?.id)
+    ? (localStorage.getItem(USER_REF_KEY) ?? Database.getUserByEmail(user.email.trim().toLowerCase())?.id)
     : null
   const walletBalance = useMemo(
     () => (userId ? Database.getUserWalletBalance(String(userId)) : 0),
@@ -450,7 +450,7 @@ export default function UserMePage() {
                 <div className="user-me-protect">
                   <h3>Superjet Global Protect</h3>
                   <p>If your visa is delayed — we follow up with the embassy and keep you updated</p>
-                  <p>If Rejected — 100% Refund on processing fees</p>
+                  <p>If rejected — embassy and provider rules apply; contact us for guidance and Super Protect coverage details.</p>
                 </div>
               </>
             )}

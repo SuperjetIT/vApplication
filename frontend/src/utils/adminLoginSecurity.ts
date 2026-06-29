@@ -1,37 +1,36 @@
-const ATTEMPTS_KEY = 'admin_login_attempts'
-const LOCKED_UNTIL_KEY = 'admin_login_locked_until'
+import { ATTEMPT_KEY, LOCKOUT_KEY } from '../config/storageKeys'
 
 const MAX_ATTEMPTS = 5
 const LOCKOUT_MS = 15 * 60 * 1000
 
 export function getLoginLockState(): { locked: boolean; remainingMs: number; attempts: number } {
-  const lockedUntil = Number(sessionStorage.getItem(LOCKED_UNTIL_KEY) || 0)
+  const lockedUntil = Number(localStorage.getItem(LOCKOUT_KEY) || 0)
   const now = Date.now()
   if (lockedUntil > now) {
     return { locked: true, remainingMs: lockedUntil - now, attempts: MAX_ATTEMPTS }
   }
   if (lockedUntil > 0 && lockedUntil <= now) {
-    sessionStorage.removeItem(LOCKED_UNTIL_KEY)
-    sessionStorage.removeItem(ATTEMPTS_KEY)
+    localStorage.removeItem(LOCKOUT_KEY)
+    localStorage.removeItem(ATTEMPT_KEY)
   }
-  const attempts = Number(sessionStorage.getItem(ATTEMPTS_KEY) || 0)
+  const attempts = Number(localStorage.getItem(ATTEMPT_KEY) || 0)
   return { locked: false, remainingMs: 0, attempts }
 }
 
 export function recordFailedLogin(): { locked: boolean; remainingMs: number; attemptsLeft: number } {
-  const attempts = Number(sessionStorage.getItem(ATTEMPTS_KEY) || 0) + 1
-  sessionStorage.setItem(ATTEMPTS_KEY, String(attempts))
+  const attempts = Number(localStorage.getItem(ATTEMPT_KEY) || 0) + 1
+  localStorage.setItem(ATTEMPT_KEY, String(attempts))
   if (attempts >= MAX_ATTEMPTS) {
     const until = Date.now() + LOCKOUT_MS
-    sessionStorage.setItem(LOCKED_UNTIL_KEY, String(until))
+    localStorage.setItem(LOCKOUT_KEY, String(until))
     return { locked: true, remainingMs: LOCKOUT_MS, attemptsLeft: 0 }
   }
   return { locked: false, remainingMs: 0, attemptsLeft: MAX_ATTEMPTS - attempts }
 }
 
 export function clearLoginAttempts() {
-  sessionStorage.removeItem(ATTEMPTS_KEY)
-  sessionStorage.removeItem(LOCKED_UNTIL_KEY)
+  localStorage.removeItem(ATTEMPT_KEY)
+  localStorage.removeItem(LOCKOUT_KEY)
 }
 
 export function formatLockoutRemaining(ms: number): string {

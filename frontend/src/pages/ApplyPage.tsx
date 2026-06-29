@@ -22,9 +22,12 @@ import {
 import type { PassportData } from '../utils/passportOCR'
 import { Database } from '../database/db'
 import { notifyAdminB2CApplication, notifyAdminNewUser } from '../utils/adminNotifications'
+import { syncApplicationToServer } from '../utils/applicationSync'
+import { syncUserToServer } from '../utils/userSync'
 import {
   isUserLoggedIn,
   saveRedirectUrl,
+  USER_REF_KEY,
 } from '../utils/authGate'
 import { readFileAsDataUrl } from '../utils/applicationDocuments'
 import { resolveNationalityDisplay } from '../utils/nationality'
@@ -111,6 +114,8 @@ type TravelerForm = {
   nationality: string
   gender: string
   passportFile?: File
+  /** Additional travellers only — when false, skip applicant residence visa / ID fields. */
+  livesInApplicantResidence?: boolean
 }
 
 type TravelInfo = {
@@ -231,13 +236,59 @@ function saveApplySession(destination: string, optionId: string, formData: FormD
     formData: {
       travelers: formData.travelers.map(({ passportFile: _file, ...rest }) => rest),
       travelInfo: formData.travelInfo,
-      uploads: formData.uploads,
+      uploads: sanitizeUploadsForSession(formData.uploads),
       departureDate: formData.departureDate?.toISOString() ?? null,
       returnDate: formData.returnDate?.toISOString() ?? null,
     },
     stepDone,
   }
-  sessionStorage.setItem(applySessionKey(destination, optionId), JSON.stringify(snapshot))
+  try {
+    sessionStorage.setItem(applySessionKey(destination, optionId), JSON.stringify(snapshot))
+  } catch {
+    /* Passport scans can exceed sessionStorage quota — keep in-memory state only */
+  }
+}
+
+function sanitizeUploadsForSession(uploads: Record<string, UploadEntry>): Record<string, UploadEntry> {
+  const next: Record<string, UploadEntry> = {}
+  for (const [key, entry] of Object.entries(uploads)) {
+    next[key] = {
+      fileName: entry.fileName,
+      sizeMb: entry.sizeMb,
+      fromPersonalStep: entry.fromPersonalStep,
+    }
+  }
+  return next
+}
+
+function loadInitialApplyBundle(destination: string, optionId: string): {
+  formData: FormData
+  stepDone: ApplySessionSnapshot['stepDone']
+} {
+  const defaultForm: FormData = {
+    travelers: [emptyTraveler()],
+    travelInfo: emptyTravelInfo(),
+    uploads: {},
+    departureDate: null,
+    returnDate: null,
+  }
+  const defaultStepDone = { personal: false, travel: false, docs: false, appt: false }
+  if (!destination || !optionId) {
+    return { formData: defaultForm, stepDone: defaultStepDone }
+  }
+  const saved = loadApplySession(destination, optionId)
+  if (!saved) {
+    return { formData: defaultForm, stepDone: defaultStepDone }
+  }
+  const travelers = Array.isArray(saved.formData.travelers) && saved.formData.travelers.length > 0
+    ? saved.formData.travelers
+    : defaultForm.travelers
+  return {
+    formData: {
+      ...restoreFormData({ ...saved.formData, travelers }),
+    },
+    stepDone: { ...defaultStepDone, ...saved.stepDone },
+  }
 }
 
 function restoreFormData(snapshot: ApplySessionSnapshot['formData']): FormData {
@@ -295,6 +346,81 @@ function getResidenceFieldRequirements(
   return { showPermitExpiry: false, showEmiratesId: false, permitLabel: '' }
 }
 
+function applicantHasResidenceDocumentation(residenceCountry: string, residencyStatus: string): boolean {
+  return getResidenceFieldRequirements(residenceCountry, 'Other', residencyStatus).showPermitExpiry
+}
+
+function getTravelerResidenceFieldRequirements(
+  traveler: TravelerForm,
+  travelerIndex: number,
+  residenceCountry: string,
+  residencyStatus: string,
+) {
+  const passportCountry = resolveNationalityName(traveler.nationality) || traveler.nationality
+  const usesApplicantResidence =
+    travelerIndex === 0 || traveler.livesInApplicantResidence === true
+  if (!usesApplicantResidence) {
+    return { showPermitExpiry: false, showEmiratesId: false, permitLabel: '', emiratesLabel: '' }
+  }
+  return getResidenceFieldRequirements(residenceCountry, passportCountry, residencyStatus)
+}
+
+function travelerUsesApplicantResidence(traveler: TravelerForm, travelerIndex: number): boolean {
+  return travelerIndex === 0 || traveler.livesInApplicantResidence === true
+}
+
+function docAppliesToTraveler(
+  doc: DocDef,
+  traveler: TravelerForm,
+  travelerIndex: number,
+  residenceCountry: string,
+  residencyStatus: string,
+): boolean {
+  const usesResidence = travelerUsesApplicantResidence(traveler, travelerIndex)
+  const passportCountry = resolveNationalityName(traveler.nationality) || traveler.nationality
+
+  if (doc.id === 'emirates_id' || doc.id === 'uae_visa') {
+    return (
+      usesResidence &&
+      isUaeResidence(residenceCountry) &&
+      residencyStatus !== 'Tourist/Visit' &&
+      residencyStatus !== 'Other'
+    )
+  }
+  if (doc.id === 'uae_entry') {
+    return (
+      usesResidence &&
+      isUaeResidence(residenceCountry) &&
+      (residencyStatus === 'Tourist/Visit' || residencyStatus === 'Other')
+    )
+  }
+  if (doc.id === 'residence_permit') {
+    if (!usesResidence || isUaeResidence(residenceCountry)) return false
+    return residenceCountry.toLowerCase() !== passportCountry.toLowerCase()
+  }
+  if (doc.id === 'enrollment_letter') {
+    return usesResidence && residencyStatus === 'Student Visa'
+  }
+
+  return true
+}
+
+function getTravelerDocList(
+  docList: DocDef[],
+  traveler: TravelerForm,
+  travelerIndex: number,
+  residenceCountry: string,
+  residencyStatus: string,
+): DocDef[] {
+  const seen = new Set<string>()
+  return docList.filter((doc) => {
+    if (!docAppliesToTraveler(doc, traveler, travelerIndex, residenceCountry, residencyStatus)) return false
+    if (seen.has(doc.id)) return false
+    seen.add(doc.id)
+    return true
+  })
+}
+
 function mimeToExtensions(types: string[]): string[] {
   const exts: string[] = []
   for (const t of types) {
@@ -337,6 +463,7 @@ function emptyTraveler(mobileCountryCode = 'ae'): TravelerForm {
     email: '',
     nationality: '',
     gender: '',
+    livesInApplicantResidence: false,
   }
 }
 
@@ -499,7 +626,9 @@ function resolveNationalityName(value: string): string {
   const trimmed = value.trim()
   if (!trimmed) return ''
   const exact = ALL_CITIZENSHIPS.find((c) => c.name.toLowerCase() === trimmed.toLowerCase())
-  return exact?.name ?? ''
+  if (exact) return exact.name
+  const byCode = ALL_CITIZENSHIPS.find((c) => c.code.toLowerCase() === trimmed.toLowerCase())
+  return byCode?.name ?? ''
 }
 
 function getSalaryCurrencyOptions(nationality: string): SalaryCurrencyOption[] {
@@ -512,11 +641,12 @@ function getSalaryCurrencyOptions(nationality: string): SalaryCurrencyOption[] {
 
 function isTravelerComplete(
   t: TravelerForm,
+  travelerIndex: number,
   residenceCountry: string,
   residencyStatus: string,
 ): boolean {
   const nationality = resolveNationalityName(t.nationality)
-  const fields = getResidenceFieldRequirements(residenceCountry, nationality, residencyStatus)
+  const fields = getTravelerResidenceFieldRequirements(t, travelerIndex, residenceCountry, residencyStatus)
   const base =
     t.firstName.trim() &&
     t.lastName.trim() &&
@@ -1660,9 +1790,11 @@ function CheckoutPaymentFormBody({
           passportCountry: resolvedNationality,
           residenceCountry,
           residencyStatus,
+          registrationSource: 'application',
           isVerified: true,
           profilePhoto: null,
           lastLogin: new Date().toISOString(),
+          loginCount: 1,
         })
         notifyAdminNewUser({
           userId: String(dbUser.id),
@@ -1671,10 +1803,11 @@ function CheckoutPaymentFormBody({
           phone: customerPhone,
           source: 'application',
         })
+        void syncUserToServer(dbUser as Record<string, unknown>)
       } else if (resolvedNationality) {
         Database.updateUser(String(dbUser.id), { passportCountry: resolvedNationality })
       }
-      localStorage.setItem('current_user_id', String(dbUser.id))
+      localStorage.setItem(USER_REF_KEY, String(dbUser.id))
 
       const docRecords = Object.entries(uploads).map(([key, entry]) => ({
         id: `doc_${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`,
@@ -1781,6 +1914,7 @@ function CheckoutPaymentFormBody({
           primary?.mobile ?? '',
         ),
       })
+      void syncApplicationToServer(dbApplication as Record<string, unknown>)
     }
 
     const params = new URLSearchParams({
@@ -2113,7 +2247,7 @@ function CheckoutPaymentFormBody({
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden>
           <path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" />
         </svg>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>If rejected — 100% refund</span>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>If rejected — contact us for Super Protect guidance</span>
       </div>
     </>
   )
@@ -2133,7 +2267,7 @@ export default function ApplyPage() {
   } = useCitizenship()
   const { isLoggedIn, user } = useAuth()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  const [authReady, setAuthReady] = useState(false)
+  const [authReady, setAuthReady] = useState(() => isUserLoggedIn())
 
   useEffect(() => {
     if (!isUserLoggedIn()) {
@@ -2151,21 +2285,14 @@ export default function ApplyPage() {
   const country = getCountry(destination)
   const selectedOption = country?.visaOptions.find((o) => o.id === optionId) ?? country?.visaOptions[0]
 
-  const [formData, setFormData] = useState<FormData>(() => ({
-    travelers: [emptyTraveler()],
-    travelInfo: emptyTravelInfo(),
-    uploads: {},
-    departureDate: null,
-    returnDate: null,
-  }))
+  const initialBundle = useMemo(
+    () => loadInitialApplyBundle(destination, optionId),
+    [destination, optionId],
+  )
 
-  const [stepDone, setStepDone] = useState({
-    personal: false,
-    travel: false,
-    docs: false,
-    appt: false,
-  })
-  const [sessionRestored, setSessionRestored] = useState(false)
+  const [formData, setFormData] = useState<FormData>(initialBundle.formData)
+  const [stepDone, setStepDone] = useState(initialBundle.stepDone)
+  const [sessionRestored, setSessionRestored] = useState(true)
 
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({})
   const [emailTouched, setEmailTouched] = useState<Record<number, boolean>>({})
@@ -2298,26 +2425,31 @@ export default function ApplyPage() {
 
   const personalComplete =
     travelers.length > 0 &&
-    travelers.every((t) => isTravelerComplete(t, residenceCountry, residencyStatus))
+    travelers.every((t, i) => isTravelerComplete(t, i, residenceCountry, residencyStatus))
 
   const personalMissingHint = useMemo(() => {
     if (personalComplete || travelers.length === 0) return null
-    const t = travelers[0]
-    const nationality = resolveNationalityName(t.nationality)
-    const fields = getResidenceFieldRequirements(residenceCountry, nationality, residencyStatus)
-    if (!t.firstName.trim()) return 'Enter first name'
-    if (!t.lastName.trim()) return 'Enter last name'
-    if (!t.dateOfBirth) return 'Select date of birth'
-    if (!nationality) return 'Select nationality from the dropdown'
-    if (!t.passportNumber.trim() || !validatePassportNumber(t.passportNumber, nationality).valid) {
-      return 'Enter a valid passport number'
-    }
-    if (!t.passportExpiry) return 'Select passport expiry date'
-    if (!t.mobile.trim()) return 'Enter mobile number'
-    if (!t.email.trim() || !isValidEmail(t.email)) return 'Enter a valid email address'
-    if (fields.showPermitExpiry && !t.uaeVisaExpiry) return `Select ${fields.permitLabel.replace(' *', '')}`
-    if (fields.showEmiratesId && !t.emiratesIdExpiry) {
-      return `Select ${(fields.emiratesLabel ?? 'National ID Expiry Date').replace(' *', '')}`
+    for (let i = 0; i < travelers.length; i++) {
+      const t = travelers[i]
+      const nationality = resolveNationalityName(t.nationality)
+      const fields = getTravelerResidenceFieldRequirements(t, i, residenceCountry, residencyStatus)
+      const who = travelers.length > 1 ? `Traveller ${i + 1}: ` : ''
+      if (!t.firstName.trim()) return `${who}Enter first name`
+      if (!t.lastName.trim()) return `${who}Enter last name`
+      if (!t.dateOfBirth) return `${who}Select date of birth`
+      if (!nationality) return `${who}Select nationality from the dropdown`
+      if (!t.passportNumber.trim() || !validatePassportNumber(t.passportNumber, nationality).valid) {
+        return `${who}Enter a valid passport number`
+      }
+      if (!t.passportExpiry) return `${who}Select passport expiry date`
+      if (!t.mobile.trim()) return `${who}Enter mobile number`
+      if (!t.email.trim() || !isValidEmail(t.email)) return `${who}Enter a valid email address`
+      if (fields.showPermitExpiry && !t.uaeVisaExpiry) {
+        return `${who}Select ${fields.permitLabel.replace(' *', '')}`
+      }
+      if (fields.showEmiratesId && !t.emiratesIdExpiry) {
+        return `${who}Select ${(fields.emiratesLabel ?? 'National ID Expiry Date').replace(' *', '')}`
+      }
     }
     return 'Complete all required traveller fields'
   }, [personalComplete, travelers, residenceCountry, residencyStatus])
@@ -2331,26 +2463,54 @@ export default function ApplyPage() {
       .sort((a, b) => (a.required === b.required ? 0 : a.required ? -1 : 1))
   }, [visaRequirements])
 
-  const requiredDocs = docList.filter((d) => d.required)
-
   const docsComplete = useMemo(() => {
     if (!country) return false
-    return travelers.every((traveler, ti) =>
-      requiredDocs.every((doc) => hasTravelerDocUploaded(ti, doc, traveler, effectiveUploads, uploadErrors)),
-    )
-  }, [travelers, requiredDocs, effectiveUploads, uploadErrors, country])
+    return travelers.every((traveler, ti) => {
+      const requiredForTraveler = getTravelerDocList(
+        docList,
+        traveler,
+        ti,
+        residenceCountry,
+        residencyStatus,
+      ).filter((d) => d.required)
+      return requiredForTraveler.every((doc) =>
+        hasTravelerDocUploaded(ti, doc, traveler, effectiveUploads, uploadErrors),
+      )
+    })
+  }, [travelers, docList, effectiveUploads, uploadErrors, country, residenceCountry, residencyStatus])
+
+  const docsMissingHint = useMemo(() => {
+    if (docsComplete || !country) return null
+    for (let ti = 0; ti < travelers.length; ti++) {
+      const traveler = travelers[ti]
+      const name = `${traveler.firstName} ${traveler.lastName}`.trim() || `Traveller ${ti + 1}`
+      const requiredForTraveler = getTravelerDocList(
+        docList,
+        traveler,
+        ti,
+        residenceCountry,
+        residencyStatus,
+      ).filter((d) => d.required)
+      for (const doc of requiredForTraveler) {
+        if (!hasTravelerDocUploaded(ti, doc, traveler, effectiveUploads, uploadErrors)) {
+          return ti === 0 ? `Upload ${doc.name}` : `${name}: upload ${doc.name}`
+        }
+      }
+    }
+    return 'Upload all required documents for each traveller'
+  }, [docsComplete, country, travelers, docList, residenceCountry, residencyStatus, effectiveUploads, uploadErrors])
 
   const apptComplete = Boolean(departureDate && returnDate && !returnDateInvalid)
 
   useEffect(() => {
-    if (!destination || !optionId || sessionRestored) return
-    const saved = loadApplySession(destination, optionId)
-    if (saved) {
-      setFormData(restoreFormData(saved.formData))
-      setStepDone(saved.stepDone)
-    }
+    setFormData(initialBundle.formData)
+    setStepDone(initialBundle.stepDone)
     setSessionRestored(true)
-  }, [destination, optionId, sessionRestored])
+  }, [initialBundle])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [step])
 
   useEffect(() => {
     if (!destination || !optionId || !sessionRestored) return
@@ -2404,7 +2564,21 @@ export default function ApplyPage() {
   }, [selectedOption])
 
   if (!authReady) {
-    return null
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: BG_GRADIENT,
+          color: '#666',
+          fontSize: 15,
+        }}
+      >
+        Loading your application…
+      </div>
+    )
   }
 
   if (!country || !selectedOption) {
@@ -2581,6 +2755,21 @@ export default function ApplyPage() {
     }))
   }
 
+  const updateTravelerResidence = (index: number, livesInApplicantResidence: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      travelers: prev.travelers.map((t, i) =>
+        i === index
+          ? {
+              ...t,
+              livesInApplicantResidence,
+              ...(livesInApplicantResidence ? {} : { uaeVisaExpiry: '', emiratesIdExpiry: '' }),
+            }
+          : t,
+      ),
+    }))
+  }
+
   const updateTravelInfo = <K extends keyof TravelInfo>(field: K, value: TravelInfo[K]) => {
     setFormData((prev) => ({ ...prev, travelInfo: { ...prev.travelInfo, [field]: value } }))
   }
@@ -2692,6 +2881,7 @@ export default function ApplyPage() {
       ...prev,
       uploads: syncPassportFilesToUploads(prev.travelers, prev.uploads),
     }))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
     goToStep('travel')
   }
 
@@ -2702,6 +2892,7 @@ export default function ApplyPage() {
       ...prev,
       uploads: syncPassportFilesToUploads(prev.travelers, prev.uploads),
     }))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
     goToStep('docs')
   }
 
@@ -2712,12 +2903,14 @@ export default function ApplyPage() {
       ...prev,
       uploads: syncPassportFilesToUploads(prev.travelers, prev.uploads),
     }))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
     goToStep('appt')
   }
 
   const handleApptContinue = () => {
     if (!apptComplete) return
     markStepDone('appt')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
     goToStep('checkout')
   }
 
@@ -2869,11 +3062,14 @@ export default function ApplyPage() {
                   const permitWarn = permitExpiryWarning(traveler.uaeVisaExpiry)
                   const emailErr = emailTouched[index] && traveler.email && !isValidEmail(traveler.email)
                   const nationalityErr = nationalityTouched[index] && !resolveNationalityName(traveler.nationality)
-                  const residenceFields = getResidenceFieldRequirements(
+                  const residenceFields = getTravelerResidenceFieldRequirements(
+                    traveler,
+                    index,
                     residenceCountry,
-                    resolveNationalityName(traveler.nationality) || traveler.nationality,
                     residencyStatus,
                   )
+                  const showResidenceToggle =
+                    index > 0 && applicantHasResidenceDocumentation(residenceCountry, residencyStatus)
                   return (
                     <div key={index} style={{ position: 'relative', background: '#fff', borderRadius: 20, padding: 28, marginBottom: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                       {index > 0 && (
@@ -2918,6 +3114,39 @@ export default function ApplyPage() {
                           <DatePickerField value={traveler.passportExpiry} onChange={(v) => updateTraveler(index, 'passportExpiry', v)} placeholder="Select expiry date" />
                           {passWarn && <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>{passWarn}</p>}
                         </div>
+                        {showResidenceToggle && (
+                          <div style={{ gridColumn: isMobile ? '1' : '1 / -1' }}>
+                            <label
+                              style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: 10,
+                                fontSize: 13,
+                                color: '#374151',
+                                cursor: 'pointer',
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={traveler.livesInApplicantResidence === true}
+                                onChange={(e) => updateTravelerResidence(index, e.target.checked)}
+                                style={{ marginTop: 3, accentColor: ACCENT }}
+                              />
+                              <span>
+                                This traveller also lives in {residenceCountry} (same as you) and has a{' '}
+                                {isUaeResidence(residenceCountry) && residencyStatus !== 'Tourist/Visit' && residencyStatus !== 'Other'
+                                  ? 'UAE residence visa & Emirates ID'
+                                  : 'valid residence permit / entry permit'}
+                              </span>
+                            </label>
+                            {traveler.livesInApplicantResidence !== true && (
+                              <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>
+                                Family members travelling from abroad only need passport details — no UAE visa or Emirates ID required.
+                              </p>
+                            )}
+                          </div>
+                        )}
                         {residenceFields.showPermitExpiry && (
                           <div>
                             <FieldLabel autoFilled={isAutoFilled(index, 'uaeVisaExpiry')}>
@@ -3095,8 +3324,19 @@ export default function ApplyPage() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'center' }}>
                   {travelers.map((traveler, ti) => {
                     const name = `${traveler.firstName} ${traveler.lastName}`.trim() || `Traveller ${ti + 1}`
-                    const uploadedCount = docList.filter((d) =>
+                    const travelerDocs = getTravelerDocList(
+                      docList,
+                      traveler,
+                      ti,
+                      residenceCountry,
+                      residencyStatus,
+                    )
+                    const uploadedCount = travelerDocs.filter((d) =>
                       hasTravelerDocUploaded(ti, d, traveler, effectiveUploads, uploadErrors),
+                    ).length
+                    const requiredCount = travelerDocs.filter((d) => d.required).length
+                    const requiredUploaded = travelerDocs.filter(
+                      (d) => d.required && hasTravelerDocUploaded(ti, d, traveler, effectiveUploads, uploadErrors),
                     ).length
                     return (
                       <div key={ti} style={{ background: '#fff', borderRadius: 20, padding: 20, minWidth: 280, flex: '1 1 280px', maxWidth: 460, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
@@ -3106,10 +3346,13 @@ export default function ApplyPage() {
                           </div>
                           <div>
                             <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{name}</p>
-                            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#888' }}>{uploadedCount}/{docList.length} docs uploaded</p>
+                            <p style={{ margin: '2px 0 0', fontSize: 12, color: requiredUploaded === requiredCount ? GREEN : '#888' }}>
+                              {requiredUploaded}/{requiredCount} required docs
+                              {travelerDocs.length > requiredCount ? ` · ${uploadedCount}/${travelerDocs.length} total` : ''}
+                            </p>
                           </div>
                         </div>
-                        {docList.map((doc) => {
+                        {travelerDocs.map((doc) => {
                           const uploadKey = `${ti}-${doc.id}`
                           const entry = getTravelerDocEntry(ti, doc.id, traveler, effectiveUploads)
                           const err = uploadErrors[uploadKey]
@@ -3277,9 +3520,16 @@ export default function ApplyPage() {
           isMobile={isMobile}
           left={<SuperVaultLock />}
           center={
-            <button type="button" onClick={() => goToStep('personal')} style={{ border: `1px solid ${ACCENT}`, background: '#fff', color: ACCENT, borderRadius: 12, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-              + Add travelers
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <button type="button" onClick={() => goToStep('personal')} style={{ border: `1px solid ${ACCENT}`, background: '#fff', color: ACCENT, borderRadius: 12, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                + Add travelers
+              </button>
+              {!docsComplete && docsMissingHint && (
+                <p style={{ margin: 0, fontSize: 12, color: '#dc2626', textAlign: 'center', maxWidth: 280 }}>
+                  {docsMissingHint}
+                </p>
+              )}
+            </div>
           }
           right={<ActionButton enabled={docsComplete} label="Proceed to Appointment →" onClick={handleDocsContinue} />}
         />

@@ -451,7 +451,6 @@ export default function ContactPage() {
           isLoggedIn={isLoggedIn}
           avatarInitials={avatarInitials}
           avatarColor={avatarColor}
-          showEvents={false}
         />
 
         {/* Hero */}

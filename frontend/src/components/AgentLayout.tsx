@@ -5,7 +5,8 @@ import { AGENT_ACCENT, AGENT_BG, AGENT_BORDER, AGENT_GRADIENTS, AGENT_LOGO_RED, 
 import { AGENT_BASE_PATH, AGENT_LOGIN_PATH } from '../config/portalRoutes'
 import { Database } from '../database/db'
 import { useDatabaseListener } from '../hooks/useDatabase'
-import { clearAgentSession, getAgentPartnerId, isAgentLoggedIn } from '../utils/agentSession'
+import { validateAgentSession } from '../utils/sessionGuard'
+import { clearAgentSession, getAgentPartnerId } from '../utils/agentSession'
 import { getWalletHealthStyle } from '../utils/walletUtils'
 
 const NAV = [
@@ -17,7 +18,7 @@ const NAV = [
 ]
 
 export function AgentGuard({ children }: { children: ReactNode }) {
-  if (!isAgentLoggedIn()) return <Navigate to={AGENT_LOGIN_PATH} replace />
+  if (!validateAgentSession()) return <Navigate to={AGENT_LOGIN_PATH} replace />
   return children
 }
 

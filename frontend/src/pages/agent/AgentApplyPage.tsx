@@ -18,7 +18,9 @@ import {
 } from '../../theme/agentTheme'
 import { getAgentPartnerId, parseFeeAed } from '../../utils/agentSession'
 import { checkEvisaSupport } from '../../utils/evisaSupport'
+import type { VisaOption } from '../../data/countries'
 import { notifyAdminB2BApplication } from '../../utils/adminNotifications'
+import { syncApplicationToServer } from '../../utils/applicationSync'
 import { readFileAsDataUrl } from '../../utils/applicationDocuments'
 import { buildPassportAutoFill } from '../../utils/passportOcrHelpers'
 import { getPreferredOcrEngine, isOcrAutoFillEnabled, scanPassportDocument } from '../../utils/scanPassportDocument'
@@ -53,6 +55,98 @@ function AutoFilledBadge() {
     <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: '#16a34a', background: '#f0fff4', borderRadius: 4, padding: '1px 6px' }}>
       Auto-filled
     </span>
+  )
+}
+
+function resolveVisaOption(country: NonNullable<ReturnType<typeof getCountry>>, optionParam: string): VisaOption {
+  if (optionParam) {
+    const byId = country.visaOptions.find((o) => o.id === optionParam)
+    if (byId) return byId
+    const byLabel = country.visaOptions.find((o) => o.label === optionParam)
+    if (byLabel) return byLabel
+  }
+  return country.visaOptions[0]
+}
+
+function VisaOptionPicker({
+  country,
+  selectedOption,
+  rate,
+  onSelect,
+}: {
+  country: NonNullable<ReturnType<typeof getCountry>>
+  selectedOption: VisaOption
+  rate: number
+  onSelect: (optionId: string) => void
+}) {
+  if (country.visaOptions.length <= 1) {
+    const opt = country.visaOptions[0]
+    return (
+      <div style={{ marginBottom: 20, padding: 14, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: AGENT_MUTED, marginBottom: 4 }}>Visa type</div>
+        <div style={{ fontWeight: 700, color: AGENT_PRIMARY }}>{opt.label}</div>
+        <div style={{ fontSize: 12, color: AGENT_MUTED, marginTop: 4 }}>
+          {opt.validity} · {opt.entry} entry · {opt.processingTime}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: AGENT_PRIMARY }}>Select visa type</h3>
+      <p style={{ margin: '0 0 12px', fontSize: 13, color: AGENT_MUTED }}>
+        Choose single or multiple entry — pricing updates automatically
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+        {country.visaOptions.map((opt) => {
+          const selected = opt.id === selectedOption.id
+          const gov = parseFeeAed(opt.fee)
+          const proc = parseFeeAed(opt.processingFee)
+          const cost = gov + proc
+          const commission = Math.round(gov * (rate / 100))
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => onSelect(opt.id)}
+              style={{
+                textAlign: 'left',
+                padding: 16,
+                borderRadius: 14,
+                cursor: 'pointer',
+                border: selected ? `2px solid ${AGENT_ACCENT}` : '1px solid #e2e8f0',
+                background: selected ? '#eff6ff' : '#fff',
+                boxShadow: selected ? '0 4px 16px rgba(37,99,235,0.12)' : 'none',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    border: selected ? `5px solid ${AGENT_ACCENT}` : '2px solid #cbd5e1',
+                    boxSizing: 'border-box',
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontWeight: 700, fontSize: 14, color: AGENT_PRIMARY }}>{opt.label}</span>
+              </div>
+              <div style={{ fontSize: 12, color: AGENT_MUTED, lineHeight: 1.6 }}>
+                <div>Validity: {opt.validity}</div>
+                <div>Entry: {opt.entry}</div>
+                <div>Processing: {opt.processingTime}</div>
+              </div>
+              <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: AGENT_PRIMARY }}>
+                Your cost: AED {cost}
+              </div>
+              <div style={{ fontSize: 12, color: AGENT_EARN_TEXT, fontWeight: 600 }}>You earn: AED {commission}</div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -129,8 +223,12 @@ export default function AgentApplyPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const destSlug = searchParams.get('destination')
-  const visaOptionLabel = searchParams.get('option') ?? ''
+  const optionParam = searchParams.get('option') ?? ''
   const country = destSlug ? getCountry(destSlug) : undefined
+  const selectedOption = useMemo(
+    () => (country ? resolveVisaOption(country, optionParam) : undefined),
+    [country, optionParam],
+  )
   const partnerId = getAgentPartnerId() ?? ''
   const dbVersion = useDatabaseListener()
   const partner = useMemo(() => Database.getPartnerById(partnerId), [partnerId, dbVersion])
@@ -140,6 +238,24 @@ export default function AgentApplyPage() {
   useEffect(() => {
     setLoading(false)
   }, [])
+
+  useEffect(() => {
+    if (!destSlug || !country) return
+    const valid = optionParam && country.visaOptions.some(
+      (o) => o.id === optionParam || o.label === optionParam,
+    )
+    if (!valid) {
+      setSearchParams({ destination: destSlug, option: country.visaOptions[0].id }, { replace: true })
+    }
+  }, [destSlug, country, optionParam, setSearchParams])
+
+  const selectVisaOption = useCallback(
+    (optionId: string) => {
+      if (!destSlug) return
+      setSearchParams({ destination: destSlug, option: optionId })
+    },
+    [destSlug, setSearchParams],
+  )
 
   const [step, setStep] = useState(1)
   const [customers, setCustomers] = useState<CustomerForm[]>([emptyCustomer()])
@@ -228,15 +344,15 @@ export default function AgentApplyPage() {
     (scan.autoFilledFields[index] ?? []).includes(field)
 
   const pricing = useMemo(() => {
-    if (!country) return null
-    const opt = country.visaOptions.find((o) => o.label === visaOptionLabel) ?? country.visaOptions[0]
+    if (!country || !selectedOption) return null
+    const opt = selectedOption
     const gov = parseFeeAed(opt.fee)
     const proc = parseFeeAed(opt.processingFee)
     const count = Math.max(customers.length, 1)
     const cost = (gov + proc) * count
     const commission = Math.round(gov * (rate / 100)) * count
     return { gov, proc, cost, commission, opt, count }
-  }, [country, visaOptionLabel, rate, customers.length])
+  }, [country, selectedOption, rate, customers.length])
 
   const wallet = useMemo(
     () => Database.getPartnerWalletBalance(partnerId),
@@ -393,6 +509,7 @@ export default function AgentApplyPage() {
       paymentStatus: paymentStatus === 'paid' ? 'paid' : 'pending',
       paymentMethod: payMethod === 'wallet' ? 'Wallet' : payMethod === 'bank' ? 'Bank Transfer' : 'Card',
     })
+    void syncApplicationToServer(newApp as Record<string, unknown>)
 
     setSubmitted({ appId: String(newApp.id) })
   }
@@ -428,7 +545,10 @@ export default function AgentApplyPage() {
       <AgentLayout>
         <AgentPageShell loading={loading}>
           <Link to={AGENT_BASE_PATH} style={{ color: AGENT_ACCENT, textDecoration: 'none', fontSize: 14, marginBottom: 16, display: 'inline-block' }}>← Dashboard</Link>
-          <DestinationPicker rate={rate} onSelect={(slug) => setSearchParams({ destination: slug })} />
+          <DestinationPicker rate={rate} onSelect={(slug) => {
+            const c = getCountry(slug)
+            setSearchParams({ destination: slug, option: c?.visaOptions[0]?.id ?? 'single' })
+          }} />
         </AgentPageShell>
       </AgentLayout>
     )
@@ -458,18 +578,29 @@ export default function AgentApplyPage() {
           ))}
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: 12, background: AGENT_CARD, borderRadius: 12, border: '1px solid #e2e8f0', maxWidth: 640 }}>
+          <FlagImage countryCode={country.countryCode} countryName={country.name} width={32} height={22} />
+          <div>
+            <div style={{ fontWeight: 700, color: AGENT_PRIMARY }}>{country.name}</div>
+            <div style={{ fontSize: 12, color: AGENT_MUTED }}>{pricing.opt.label} · {pricing.opt.entry} entry</div>
+          </div>
+        </div>
+
+        <div style={{ maxWidth: 640 }}>
+          <VisaOptionPicker
+            country={country}
+            selectedOption={pricing.opt}
+            rate={rate}
+            onSelect={selectVisaOption}
+          />
+        </div>
+
         {error && <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 14, marginBottom: 16, color: AGENT_ERROR, fontSize: 13 }}>{error}</div>}
 
         {step === 1 && (
           <div style={{ background: AGENT_CARD, borderRadius: 20, padding: 28, maxWidth: 640, boxShadow: '0 2px 12px rgba(37,99,235,0.06)', border: '1px solid #e2e8f0' }}>
             <h2 style={{ margin: '0 0 4px', fontSize: 20, color: AGENT_PRIMARY }}>Who are you applying for?</h2>
             <p style={{ margin: '0 0 20px', color: AGENT_MUTED, fontSize: 13 }}>Enter your customer&apos;s details</p>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: 12, background: '#f8fafc', borderRadius: 12 }}>
-              <FlagImage countryCode={country.countryCode} countryName={country.name} width={32} height={22} />
-              <span style={{ fontWeight: 600, color: AGENT_PRIMARY }}>{country.name}</span>
-              <span style={{ color: AGENT_MUTED, fontSize: 13 }}>· {pricing.opt.label}</span>
-            </div>
 
             {customers.map((c, idx) => (
               <div key={idx} style={{ marginBottom: 20, paddingBottom: 20, borderBottom: idx < customers.length - 1 ? '1px solid #e2e8f0' : 'none' }}>

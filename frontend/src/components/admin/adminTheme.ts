@@ -19,10 +19,10 @@ export const PURPLE = '#8b5cf6'
 
 export const cardStyle: CSSProperties = {
   background: CARD_BG,
-  borderRadius: 16,
+  borderRadius: 12,
   border: `1px solid ${BORDER}`,
   boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-  padding: 20,
+  padding: 16,
 }
 
 export const hoverCardProps = {
@@ -85,13 +85,13 @@ export const outlineBtn: CSSProperties = {
 }
 
 export const tableHeaderStyle: CSSProperties = {
-  padding: '12px 14px',
+  padding: '10px 14px',
   fontWeight: 600,
   color: TEXT_SECONDARY,
   fontSize: 11,
   textTransform: 'uppercase',
-  letterSpacing: '0.06em',
-  background: PAGE_BG,
+  letterSpacing: '0.05em',
+  background: '#f8f9fc',
 }
 
 export const tabActive = (active: boolean): CSSProperties => ({

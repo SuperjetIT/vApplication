@@ -69,7 +69,7 @@ function getAdminDisplayName(): string {
 export default function AdminDashboard() {
   useDatabaseListener()
   const navigate = useNavigate()
-  const { path } = usePortalBase()
+  const { path, basePath } = usePortalBase()
   const [period, setPeriod] = useState<'3M' | '6M' | '1Y'>('6M')
   const [resolvedActions, setResolvedActions] = useState<Set<string>>(new Set())
   const chartData = period === '3M' ? REVENUE_CHART_DATA.slice(-3) : period === '1Y' ? REVENUE_CHART_DATA : REVENUE_CHART_DATA
@@ -128,8 +128,8 @@ export default function AdminDashboard() {
   ]
 
   return (
-    <AdminLayout activePath="/admin" title="Dashboard">
-      <style>{`@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.2)}}`}</style>
+    <AdminLayout activePath={basePath} title="Dashboard">
+      <style>{`@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.2)}} @keyframes float3d { 0%, 100% { transform: rotate(-8deg) translateY(0); } 50% { transform: rotate(-8deg) translateY(-10px); } }`}</style>
 
       {/* Hero banner */}
       <div className="admin-hero" style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #2d1b69 50%, #f93e42 150%)', position: 'relative', overflow: 'hidden' }}>
@@ -144,16 +144,31 @@ export default function AdminDashboard() {
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#fff' }}>{greeting}, {adminName} 👋</h2>
             <p style={{ margin: '6px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Here's what's happening with Superjet Global today</p>
             <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
-              {[`📋 ${stats.activeApplications} Active Applications`, `💰 AED ${Math.round(stats.totalRevenue).toLocaleString()} Revenue`, `✅ ${stats.approvedApplications} Approved`, `🏢 B2B: ${stats.b2bApplications}`, `👤 B2C: ${stats.b2cApplications}`, `⚠ AED ${overdue.amount.toLocaleString()} Overdue`].map((p) => (
+              {[`📋 ${stats.activeApplications} Active Applications`, `💰 AED ${Math.round(stats.totalRevenue).toLocaleString()} Revenue`, `✅ ${stats.approvedApplications} Approved`, `🏢 B2B: ${stats.b2bApplications}`, `👤 B2C: ${stats.b2cApplications}`, `🧑 B2C Users: ${stats.b2cRegisteredUsers} (${stats.b2cUsersLoggedIn} logged in)`, `⚠ AED ${overdue.amount.toLocaleString()} Overdue`].map((p) => (
                 <span key={p} style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', borderRadius: 40, padding: '8px 16px', color: '#fff', fontSize: 13, fontWeight: 500 }}>{p}</span>
               ))}
             </div>
           </div>
-          <div className="admin-hero-deco" style={{ width: 160, height: 100, borderRadius: 16, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', transform: 'rotate(-8deg)', padding: 16, color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: 700 }}>
-            <div style={{ width: 28, height: 20, background: 'rgba(255,255,255,0.3)', borderRadius: 4, marginBottom: 8 }} />
-            <div style={{ height: 2, background: 'rgba(255,255,255,0.2)', marginBottom: 4 }} />
-            <div style={{ height: 2, background: 'rgba(255,255,255,0.2)', width: '70%' }} />
-            <div style={{ marginTop: 12, letterSpacing: 2 }}>SUPERJET</div>
+          <div
+            className="admin-hero-deco"
+            style={{
+              width: 100,
+              height: 70,
+              borderRadius: 16,
+              background: 'rgba(255,255,255,0.12)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 28,
+              fontWeight: 800,
+              color: '#fff',
+              transform: 'rotate(-8deg)',
+              animation: 'float3d 5s ease-in-out infinite',
+            }}
+          >
+            SJ
           </div>
         </div>
       </div>
@@ -169,9 +184,27 @@ export default function AdminDashboard() {
       )}
 
       {/* Stat cards */}
-      <div className="admin-stat-grid" style={{ marginBottom: 20 }}>
-        {dynamicCards.map((c) => (
-          <div key={c.label} {...hoverCardProps} style={{ ...cardStyle, position: 'relative', overflow: 'hidden', ...hoverCardProps.style }}>
+      <div className="admin-stat-grid" style={{ marginBottom: 16 }}>
+        {dynamicCards.map((c, i) => (
+          <div
+            key={c.label}
+            style={{
+              ...cardStyle,
+              position: 'relative',
+              overflow: 'hidden',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              animation: `countUp 0.4s ease both`,
+              animationDelay: `${i * 0.08}s`,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-3px) scale(1.01)'
+              e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.10)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'none'
+              e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)'
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ width: 48, height: 48, borderRadius: 14, background: c.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c.iconColor} strokeWidth="2"><circle cx="12" cy="12" r="4" /></svg>
@@ -179,7 +212,7 @@ export default function AdminDashboard() {
               <span style={{ fontSize: 12, fontWeight: 600, color: c.up ? '#22c55e' : '#ef4444' }}>{c.change}</span>
             </div>
             <div className="admin-stat-value" style={{ fontWeight: 800, color: TEXT_PRIMARY, marginTop: 12 }}>{c.value}</div>
-            <div style={{ fontSize: 13, color: TEXT_SECONDARY, marginTop: 4 }}>{c.label}</div>
+            <div className="admin-stat-label" style={{ fontSize: 12, color: TEXT_SECONDARY, marginTop: 4 }}>{c.label}</div>
             <svg style={{ position: 'absolute', bottom: 16, right: 16, width: 60, height: 24 }} viewBox="0 0 60 24">
               <polyline points={c.spark} fill="none" stroke={c.iconColor} strokeWidth="2" opacity={0.4} />
             </svg>

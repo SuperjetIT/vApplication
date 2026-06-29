@@ -28,6 +28,7 @@ import AdminReports from './pages/admin/AdminReports'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminRegister from './pages/admin/AdminRegister'
+import AdminRegistrationsPage from './pages/admin/AdminRegistrationsPage'
 import AdminCaseDetail from './pages/admin/AdminCaseDetail'
 import NotFoundPage from './pages/NotFoundPage'
 import OperationsLoginPage from './pages/admin/OperationsLoginPage'
@@ -50,6 +51,7 @@ import {
   ADMIN_LOGIN_PATH_LEGACY,
   AGENT_BASE_PATH,
   AGENT_LOGIN_PATH,
+  AGENT_REGISTER_PATH,
   OPERATIONS_BASE_PATH,
   OPERATIONS_LOGIN_PATH,
 } from './config/portalRoutes'
@@ -161,6 +163,7 @@ function AppContent() {
         <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
         <Route path={OPERATIONS_LOGIN_PATH} element={<OperationsLoginPage />} />
         <Route path={AGENT_LOGIN_PATH} element={<AgentLoginPage />} />
+        <Route path={AGENT_REGISTER_PATH} element={<AgentRegisterPage />} />
         <Route path={ADMIN_LOGIN_PATH_LEGACY} element={<NotFoundPage />} />
         <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
         <Route path={OPERATIONS_BASE_PATH} element={<OperationsGuard><AdminDashboard /></OperationsGuard>} />
@@ -169,6 +172,7 @@ function AppContent() {
         <Route path="/admin/agents" element={<AdminGuard><AdminAgents /></AdminGuard>} />
         <Route path="/admin/register" element={<AdminGuard><AdminRegister /></AdminGuard>} />
         <Route path="/admin/register/:channel" element={<AdminGuard><AdminRegister /></AdminGuard>} />
+        <Route path="/admin/registrations" element={<AdminGuard><AdminRegistrationsPage /></AdminGuard>} />
         <Route path="/admin/invoices" element={<AdminGuard><AdminInvoices /></AdminGuard>} />
         <Route path="/admin/payments" element={<AdminGuard><AdminPayments /></AdminGuard>} />
         <Route path="/admin/expenses" element={<AdminGuard><AdminExpenses /></AdminGuard>} />
@@ -181,6 +185,7 @@ function AppContent() {
         <Route path={`${OPERATIONS_BASE_PATH}/agents`} element={<OperationsGuard><AdminAgents /></OperationsGuard>} />
         <Route path={`${OPERATIONS_BASE_PATH}/register`} element={<OperationsGuard><AdminRegister /></OperationsGuard>} />
         <Route path={`${OPERATIONS_BASE_PATH}/register/:channel`} element={<OperationsGuard><AdminRegister /></OperationsGuard>} />
+        <Route path={`${OPERATIONS_BASE_PATH}/registrations`} element={<OperationsGuard><AdminRegistrationsPage /></OperationsGuard>} />
         <Route path={`${OPERATIONS_BASE_PATH}/invoices`} element={<OperationsGuard><AdminInvoices /></OperationsGuard>} />
         <Route path={`${OPERATIONS_BASE_PATH}/payments`} element={<OperationsGuard><AdminPayments /></OperationsGuard>} />
         <Route path={`${OPERATIONS_BASE_PATH}/expenses`} element={<OperationsGuard><AdminExpenses /></OperationsGuard>} />
@@ -199,7 +204,6 @@ function AppContent() {
         <Route path="/user/me/wallet" element={<UserWalletPage />} />
         <Route path="/admin/wallet" element={<AdminGuard><AdminWalletPage /></AdminGuard>} />
         <Route path={`${OPERATIONS_BASE_PATH}/wallet`} element={<OperationsGuard><AdminWalletPage /></OperationsGuard>} />
-        <Route path="/agent/register" element={<AgentRegisterPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {!isAdminRoute && isModalOpen && <CitizenshipModal />}

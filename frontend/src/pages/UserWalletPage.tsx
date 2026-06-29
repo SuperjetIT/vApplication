@@ -12,8 +12,10 @@ import { downloadWalletStatement } from '../utils/walletUtils'
 const B2C_ACCENT = '#5057ea'
 const PRESETS = [100, 250, 500, 1000]
 
+import { USER_REF_KEY } from '../utils/authGate'
+
 function getUserId(email: string): string | null {
-  const fromStorage = localStorage.getItem('current_user_id')
+  const fromStorage = localStorage.getItem(USER_REF_KEY)
   if (fromStorage) return fromStorage
   const user = Database.getUserByEmail(email.trim().toLowerCase())
   return user ? String(user.id) : null

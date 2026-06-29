@@ -103,6 +103,30 @@ export function getPhonePlaceholder(dialCode: string): string {
   return '123456789'
 }
 
+/** Search by country name, ISO code, or dial code (e.g. "ind" → India, Indonesia). */
+export function filterPhoneCodeOptions(
+  options: PhoneCodeOption[],
+  query: string,
+  limit = 40,
+): PhoneCodeOption[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return options
+  const dialQ = q.replace(/^\+/, '')
+  return options
+    .filter((opt) => {
+      const name = opt.countryName.toLowerCase()
+      const code = opt.countryCode.toLowerCase()
+      const dial = opt.dial.replace('+', '')
+      return (
+        name.includes(q) ||
+        code.includes(q) ||
+        dial.includes(dialQ) ||
+        name.split(/\s+/).some((word) => word.startsWith(q))
+      )
+    })
+    .slice(0, limit)
+}
+
 export function formatFullPhone(mobileCode: string, mobile: string): string {
   const digits = mobile.replace(/\D/g, '')
   if (!digits) return ''

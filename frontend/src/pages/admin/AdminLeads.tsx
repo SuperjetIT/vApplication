@@ -16,6 +16,7 @@ import {
   selectStyle,
   outlineBtn,
   primaryBtn,
+  SUCCESS,
   tableHeaderStyle,
   tabActive,
   hoverCardProps,
@@ -24,15 +25,29 @@ import { usePortalBase } from '../../hooks/usePortalBase'
 import { CountryFlag } from '../../components/CountryFlag'
 import { useDatabaseListener } from '../../hooks/useDatabase'
 import { Database } from '../../database/db'
-import {
-  LEAD_STATUSES,
-  getStatusColor,
-  getUniqueDestinations,
-  type LeadStatus,
-} from '../../types/adminTypes'
-import { loadLeads, updateLeadStatus } from '../../utils/b2cFlow'
+import { LEAD_STATUSES, getUniqueDestinations } from '../../types/adminTypes'
+import { loadLeads } from '../../utils/b2cFlow'
+import { syncApplicationToServer } from '../../utils/applicationSync'
 
 const PER_PAGE = 10
+
+const APP_STATUS_OPTIONS = [
+  { value: 'pending_docs', label: 'Pending Documents', color: '#f59e0b' },
+  { value: 'under_review', label: 'Under Review', color: '#3b82f6' },
+  { value: 'ready_to_submit', label: 'Ready to Submit', color: '#8b5cf6' },
+  { value: 'submitted', label: 'Submitted to Embassy', color: '#06b6d4' },
+  { value: 'approved', label: 'Approved', color: '#22c55e' },
+  { value: 'rejected', label: 'Rejected', color: '#ef4444' },
+  { value: 'on_hold', label: 'On Hold', color: '#f97316' },
+] as const
+
+function getAppDbStatus(leadId: string): string {
+  return String(Database.getApplicationById(leadId)?.status ?? 'under_review').toLowerCase()
+}
+
+function getStatusOption(dbStatus: string) {
+  return APP_STATUS_OPTIONS.find((o) => o.value === dbStatus) ?? APP_STATUS_OPTIONS[1]
+}
 
 const viewBtnStyle = {
   display: 'inline-block' as const,
@@ -49,7 +64,7 @@ const viewBtnStyle = {
 }
 
 export default function AdminLeads() {
-  const { path, basePath } = usePortalBase()
+  const { path, basePath, isOperations } = usePortalBase()
   useDatabaseListener()
   const leads = loadLeads()
   const [searchQuery, setSearchQuery] = useState('')
@@ -59,6 +74,12 @@ export default function AdminLeads() {
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table')
   const [page, setPage] = useState(1)
   const [statusMenuId, setStatusMenuId] = useState<string | null>(null)
+  const [statusNoteModal, setStatusNoteModal] = useState<{
+    leadId: string
+    status: string
+    label: string
+  } | null>(null)
+  const [statusNote, setStatusNote] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [newApp, setNewApp] = useState({ name: '', email: '', destination: '', source: 'B2C' as 'B2C' | 'B2B' })
@@ -108,10 +129,25 @@ export default function AdminLeads() {
     setPage(1)
   }
 
-  const updateStatus = (id: string, status: LeadStatus) => {
-    updateLeadStatus(id, status)
+  const openStatusNoteModal = (leadId: string, status: string, label: string) => {
     setStatusMenuId(null)
-    setToast(`Status updated to ${status}`)
+    setStatusNote('')
+    setStatusNoteModal({ leadId, status, label })
+  }
+
+  const confirmStatusUpdate = () => {
+    if (!statusNoteModal) return
+    const operatorId = isOperations ? 'operations' : 'admin'
+    const note = statusNote.trim() || `Updated by ${operatorId}`
+    const updated = Database.updateApplicationStatus(
+      statusNoteModal.leadId,
+      statusNoteModal.status,
+      note,
+      operatorId,
+    )
+    if (updated) void syncApplicationToServer(updated as Record<string, unknown>)
+    setStatusNoteModal(null)
+    setToast(`✓ Status updated to ${statusNoteModal.label}`)
   }
 
   const handleCreateApplication = () => {
@@ -158,6 +194,10 @@ export default function AdminLeads() {
   return (
     <AdminLayout activePath={`${basePath}/leads`} title="Applications">
       <AdminToast message={toast} onClose={() => setToast(null)} />
+
+      <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b', maxWidth: 720 }}>
+        All visa applications — B2C direct and B2B partner submitted. For partner registrations, see Register → Registrations.
+      </p>
 
       {/* Top 4 mini stat pills */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -331,14 +371,18 @@ export default function AdminLeads() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
-                {['#', 'Customer', 'Passport', 'Destination', 'Source', 'Partner', 'Status', 'Assigned', 'Created', 'Action'].map((h) => (
+                {['#', 'Type', 'Applicant', 'Passport', 'Destination', 'Payment', 'Pay status', 'Status', 'Assigned', 'Created', 'Action'].map((h) => (
                   <th key={h} style={{ ...tableHeaderStyle, background: '#f8f9fc' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {paged.map((lead, i) => {
-                const sc = getStatusColor(lead.status)
+                const dbStatus = getAppDbStatus(lead.id)
+                const statusOpt = getStatusOption(dbStatus)
+                const partner =
+                  lead.agentId ? Database.getPartnerById(lead.agentId) : null
+                const partnerContact = partner ? String(partner.contactPerson ?? '') : ''
                 return (
                   <tr
                     key={lead.id}
@@ -348,13 +392,42 @@ export default function AdminLeads() {
                   >
                     <td style={{ padding: 16, color: TEXT_MUTED }}>{(page - 1) * PER_PAGE + i + 1}</td>
                     <td style={{ padding: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <AdminAvatar name={lead.name} />
+                      <span
+                        style={{
+                          background: lead.source === 'B2C' ? '#eff6ff' : '#fff0f0',
+                          color: lead.source === 'B2C' ? '#1d4ed8' : '#b91c1c',
+                          borderRadius: 20,
+                          padding: '3px 10px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {lead.source}
+                      </span>
+                    </td>
+                    <td style={{ padding: 16 }}>
+                      {lead.source === 'B2B' ? (
                         <div>
-                          <div style={{ fontWeight: 600 }}>{lead.name}</div>
-                          <div style={{ fontSize: 12, color: TEXT_SECONDARY }}>{lead.email}</div>
+                          <div style={{ fontWeight: 600 }}>{lead.agentName ?? 'Partner'}</div>
+                          {partnerContact && (
+                            <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2 }}>
+                              via {partnerContact}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 12, color: TEXT_SECONDARY, marginTop: 4 }}>
+                            {lead.name}
+                            {lead.email ? ` · ${lead.email}` : ''}
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <AdminAvatar name={lead.name} />
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{lead.name}</div>
+                            <div style={{ fontSize: 12, color: TEXT_SECONDARY }}>{lead.email}</div>
+                          </div>
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: 16, color: TEXT_SECONDARY }}>
                       {lead.passport !== '—' ? (
@@ -367,22 +440,40 @@ export default function AdminLeads() {
                       )}
                     </td>
                     <td style={{ padding: 16 }}>{lead.destination}</td>
+                    <td style={{ padding: 16, fontWeight: 700 }}>
+                      AED {(lead.amount ?? 0).toLocaleString()}
+                    </td>
                     <td style={{ padding: 16 }}>
                       <span
                         style={{
                           padding: '4px 10px',
                           borderRadius: 20,
                           fontSize: 12,
-                          background: lead.source === 'B2C' ? '#eef4ff' : '#fff0f0',
-                          color: lead.source === 'B2C' ? '#5057ea' : BRAND,
-                          border: `1px solid ${lead.source === 'B2C' ? '#bfdbfe' : '#fce7e7'}`,
+                          fontWeight: 600,
+                          background:
+                            String(lead.paymentStatus).toLowerCase() === 'paid'
+                              ? '#f0fff4'
+                              : String(lead.paymentStatus).toLowerCase() === 'failed'
+                                ? '#fef2f2'
+                                : '#fffbeb',
+                          color:
+                            String(lead.paymentStatus).toLowerCase() === 'paid'
+                              ? '#16a34a'
+                              : String(lead.paymentStatus).toLowerCase() === 'failed'
+                                ? '#dc2626'
+                                : '#b45309',
+                          border: `1px solid ${
+                            String(lead.paymentStatus).toLowerCase() === 'paid'
+                              ? '#bbf7d0'
+                              : String(lead.paymentStatus).toLowerCase() === 'failed'
+                                ? '#fecaca'
+                                : '#fde68a'
+                          }`,
+                          textTransform: 'capitalize',
                         }}
                       >
-                        {lead.source}
+                        {String(lead.paymentStatus ?? 'pending')}
                       </span>
-                    </td>
-                    <td style={{ padding: 16, color: TEXT_SECONDARY, fontSize: 13 }}>
-                      {lead.source === 'B2B' ? (lead.agentName ?? '—') : '—'}
                     </td>
                     <td style={{ padding: 16, position: 'relative' }}>
                       <button
@@ -392,13 +483,14 @@ export default function AdminLeads() {
                           padding: '4px 10px',
                           borderRadius: 20,
                           fontSize: 12,
-                          background: sc.bg,
-                          color: sc.color,
-                          border: `1px solid ${sc.border}`,
+                          fontWeight: 600,
+                          background: `${statusOpt.color}18`,
+                          color: statusOpt.color,
+                          border: `1px solid ${statusOpt.color}44`,
                           cursor: 'pointer',
                         }}
                       >
-                        {lead.status}
+                        {statusOpt.label}
                       </button>
                       {statusMenuId === lead.id && (
                         <div
@@ -406,34 +498,49 @@ export default function AdminLeads() {
                             position: 'absolute',
                             top: 48,
                             left: 16,
+                            zIndex: 9999,
                             background: '#fff',
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: 12,
-                            zIndex: 50,
-                            minWidth: 160,
+                            borderRadius: 16,
                             boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                            border: '1px solid #e2e8f0',
+                            padding: 8,
+                            width: 220,
                           }}
                         >
-                          {LEAD_STATUSES.map((s) => (
+                          {APP_STATUS_OPTIONS.map((opt) => (
                             <button
-                              key={s}
+                              key={opt.value}
                               type="button"
-                              onClick={() => updateStatus(lead.id, s)}
+                              onClick={() => openStatusNoteModal(lead.id, opt.value, opt.label)}
                               style={{
-                                display: 'block',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
                                 width: '100%',
-                                textAlign: 'left',
                                 padding: '10px 14px',
                                 border: 'none',
                                 background: 'none',
                                 color: TEXT_PRIMARY,
-                                fontSize: 13,
+                                fontSize: 14,
                                 cursor: 'pointer',
+                                textAlign: 'left',
                               }}
-                              onMouseEnter={(e) => { e.currentTarget.style.background = PAGE_BG }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = '#f8f9fc' }}
                               onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
                             >
-                              {s}
+                              <span
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  background: opt.color,
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <span style={{ flex: 1 }}>{opt.label}</span>
+                              {dbStatus === opt.value && (
+                                <span style={{ color: SUCCESS, fontWeight: 700 }}>✓</span>
+                              )}
                             </button>
                           ))}
                         </div>
@@ -476,7 +583,7 @@ export default function AdminLeads() {
         <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 16 }}>
           {LEAD_STATUSES.map((status) => {
             const col = filteredLeads.filter((l) => l.status === status)
-            const sc = getStatusColor(status)
+            const sc = { bg: '#f8f9fc', color: TEXT_PRIMARY, border: BORDER }
             return (
               <div
                 key={status}
@@ -545,6 +652,55 @@ export default function AdminLeads() {
             )
           })}
         </div>
+      )}
+
+      {statusNoteModal && (
+        <>
+          <div
+            role="presentation"
+            onClick={() => setStatusNoteModal(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 2000 }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%,-50%)',
+              ...cardStyle,
+              padding: 24,
+              maxWidth: 400,
+              width: '90%',
+              zIndex: 2001,
+            }}
+          >
+            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700 }}>Update status</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: TEXT_SECONDARY }}>
+              Changing to: <strong>{statusNoteModal.label}</strong>
+            </p>
+            <label style={{ display: 'block', fontSize: 13, color: TEXT_SECONDARY, marginBottom: 6 }}>
+              Add a note (optional):
+            </label>
+            <textarea
+              value={statusNote}
+              onChange={(e) => setStatusNote(e.target.value)}
+              rows={3}
+              style={{ ...inputStyle, width: '100%', marginBottom: 16, resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setStatusNoteModal(null)}
+                style={{ ...outlineBtn, flex: 1, border: `1px solid ${BORDER}`, background: '#fff' } as typeof outlineBtn}
+              >
+                Cancel
+              </button>
+              <button type="button" onClick={confirmStatusUpdate} style={{ ...primaryBtn, flex: 1 }}>
+                Update Status
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {createOpen && (

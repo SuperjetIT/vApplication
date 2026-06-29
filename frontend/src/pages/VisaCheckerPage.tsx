@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Navbar } from '../components/Navbar'
 import { SiteFooter } from '../components/SiteFooter'
@@ -71,7 +71,7 @@ function CheckCircleIcon() {
 
 export default function VisaCheckerPage() {
   const { isLoggedIn, avatarInitials, avatarColor, user } = useAuth()
-  const { countryCode } = useCitizenship()
+  const { countryCode, citizenship, citizenshipCode } = useCitizenship()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
 
   const [fullName, setFullName] = useState(user?.fullName ?? '')
@@ -95,6 +95,46 @@ export default function VisaCheckerPage() {
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
+
+  const destinationOptions = useMemo(() => {
+    const passportSlugs: Record<string, string[]> = {
+      India: ['india'],
+      UAE: ['uae'],
+      'United Arab Emirates': ['uae'],
+      'United Kingdom': ['uk'],
+      USA: ['united-states'],
+      'United States': ['united-states'],
+      Pakistan: ['pakistan'],
+      Philippines: ['philippines'],
+      Kenya: ['kenya'],
+      Malaysia: ['malaysia'],
+      Egypt: ['egypt'],
+      Indonesia: ['indonesia'],
+      Thailand: ['thailand'],
+      Vietnam: ['vietnam'],
+      Canada: ['canada'],
+      Australia: ['australia'],
+      'Saudi Arabia': ['saudi-arabia'],
+      Singapore: ['singapore'],
+      Brazil: ['brazil'],
+      'South Korea': ['south-korea'],
+      Japan: ['japan'],
+      France: ['france'],
+    }
+    const slugsToHide = passportSlugs[citizenship] || []
+    return countries.filter(
+      (c) =>
+        c.name.toLowerCase() !== citizenship.toLowerCase() &&
+        c.countryCode.toLowerCase() !== citizenshipCode.toLowerCase() &&
+        !slugsToHide.includes(c.slug),
+    )
+  }, [citizenship, citizenshipCode])
+
+  useEffect(() => {
+    if (destinationOptions.length && !destinationOptions.some((c) => c.slug === destination)) {
+      setDestination(destinationOptions[0].slug)
+    }
+  }, [destinationOptions, destination])
 
   useEffect(() => {
     if (countryCode) setNationality(countryCode)
@@ -172,7 +212,6 @@ export default function VisaCheckerPage() {
         isLoggedIn={isLoggedIn}
         avatarInitials={avatarInitials}
         avatarColor={avatarColor}
-        showEvents={false}
       />
 
       <header
@@ -501,12 +540,15 @@ export default function VisaCheckerPage() {
                     onChange={(e) => setDestination(e.target.value)}
                     style={inputStyle}
                   >
-                    {countries.map((c) => (
+                    {destinationOptions.map((c) => (
                       <option key={c.slug} value={c.slug}>
                         {c.name}
                       </option>
                     ))}
                   </select>
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: '#666' }}>
+                    Showing destinations that require a visa for {citizenship} passport holders
+                  </p>
                 </div>
                 <div style={fieldWrap}>
                   <label style={labelStyle}>

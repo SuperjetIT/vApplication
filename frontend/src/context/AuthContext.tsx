@@ -10,12 +10,14 @@ import {
 import { getAvatarColor, getDisplayName, getInitials } from '../utils/avatar'
 import { Database } from '../database/db'
 
-import { LAST_LOGIN_EMAIL_KEY, USER_LOGGED_IN_KEY } from '../utils/authGate'
+import { LAST_LOGIN_EMAIL_KEY, USER_LOGGED_IN_KEY, USER_REF_KEY, USER_SESSION_KEY } from '../utils/authGate'
+import { USER_EXP_KEY, setSessionExpiry } from '../config/storageKeys'
 import { notifyAdminNewUser } from '../utils/adminNotifications'
+import { syncUserToServer } from '../utils/userSync'
 
-const USER_KEY = 'supervisa_user'
+const USER_KEY = USER_SESSION_KEY
 const OTP_EMAIL_KEY = 'supervisa_otp_email'
-const CURRENT_USER_ID_KEY = 'current_user_id'
+const CURRENT_USER_ID_KEY = USER_REF_KEY
 
 function loadProfilePhotoFromDb(email: string): string | null {
   const dbUser = Database.getUserByEmail(email.trim().toLowerCase())
@@ -23,11 +25,25 @@ function loadProfilePhotoFromDb(email: string): string | null {
   return typeof photo === 'string' && photo.trim() ? photo : null
 }
 
-function syncUserToDatabase(email: string, fullName: string) {
+export type AuthUser = {
+  email: string
+  fullName?: string
+}
+
+type ServerUserMeta = {
+  id?: string
+  lastLogin?: string
+  loginCount?: number
+  registrationSource?: string
+}
+
+function syncUserToDatabase(email: string, fullName: string, serverMeta?: ServerUserMeta) {
   const normalized = email.trim().toLowerCase()
+  const now = new Date().toISOString()
   const existing = Database.getUserByEmail(normalized)
   if (!existing) {
     const created = Database.createUser({
+      id: serverMeta?.id,
       fullName,
       email: normalized,
       phone: '',
@@ -35,30 +51,30 @@ function syncUserToDatabase(email: string, fullName: string) {
       passportCountry: '',
       residenceCountry: 'UAE',
       residencyStatus: 'Resident',
+      registrationSource: serverMeta?.registrationSource ?? 'sign_in',
       isVerified: true,
       profilePhoto: null,
-      lastLogin: new Date().toISOString(),
+      lastLogin: serverMeta?.lastLogin ?? now,
+      loginCount: serverMeta?.loginCount ?? 1,
     })
     notifyAdminNewUser({
       userId: String(created.id),
       fullName,
       email: normalized,
-      source: 'sign_in',
+      source: serverMeta?.registrationSource === 'application' ? 'application' : 'sign_in',
     })
     localStorage.setItem(CURRENT_USER_ID_KEY, String(created.id))
+    void syncUserToServer(created as Record<string, unknown>)
     return
   }
-  Database.updateUser(String(existing.id), {
+  const updated = Database.updateUser(String(existing.id), {
     fullName,
-    lastLogin: new Date().toISOString(),
+    lastLogin: serverMeta?.lastLogin ?? now,
+    loginCount: serverMeta?.loginCount ?? existing.loginCount ?? 1,
     isVerified: true,
   })
   localStorage.setItem(CURRENT_USER_ID_KEY, String(existing.id))
-}
-
-export type AuthUser = {
-  email: string
-  fullName?: string
+  if (updated) void syncUserToServer(updated as Record<string, unknown>)
 }
 
 type AuthContextValue = {
@@ -68,7 +84,7 @@ type AuthContextValue = {
   avatarColor: string
   profilePhotoUrl: string | null
   displayName: string
-  loginWithEmail: (email: string, verifiedUser?: AuthUser) => Promise<void>
+  loginWithEmail: (email: string, verifiedUser?: AuthUser, serverMeta?: ServerUserMeta) => Promise<void>
   logout: () => void
   updateProfile: (fullName: string) => Promise<void>
   updateProfilePhoto: (dataUrl: string | null) => Promise<void>
@@ -77,7 +93,7 @@ type AuthContextValue = {
   verifyOtp: (
     email: string,
     code: string,
-  ) => Promise<{ ok: boolean; error?: string; user?: AuthUser }>
+  ) => Promise<{ ok: boolean; error?: string; user?: AuthUser; serverMeta?: ServerUserMeta }>
   getPendingOtpEmail: () => string | null
 }
 
@@ -193,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.email])
 
   const loginWithEmail = useCallback(
-    async (email: string, verifiedUser?: AuthUser) => {
+    async (email: string, verifiedUser?: AuthUser, serverMeta?: ServerUserMeta) => {
       const normalized = email.trim().toLowerCase()
       let nextUser: AuthUser = verifiedUser ?? { email: normalized }
 
@@ -204,9 +220,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       applyUser(nextUser)
-      syncUserToDatabase(normalized, nextUser.fullName ?? '')
+      syncUserToDatabase(normalized, nextUser.fullName ?? '', serverMeta)
       localStorage.setItem(USER_LOGGED_IN_KEY, 'true')
       localStorage.setItem(LAST_LOGIN_EMAIL_KEY, normalized)
+      setSessionExpiry(USER_EXP_KEY)
       sessionStorage.removeItem(OTP_EMAIL_KEY)
     },
     [applyUser],
@@ -299,7 +316,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    let data: { success: boolean; error?: string; user?: { email: string; fullName?: string } }
+    let data: {
+      success: boolean
+      error?: string
+      user?: {
+        email: string
+        fullName?: string
+        id?: string
+        lastLogin?: string
+        loginCount?: number
+        registrationSource?: string
+      }
+    }
     try {
       data = (await res.json()) as typeof data
     } catch {
@@ -322,7 +350,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fullName: (data.user?.fullName ?? '').trim() || undefined,
     }
 
-    return { ok: true, user: authUser }
+    const serverMeta: ServerUserMeta = {
+      id: data.user?.id,
+      lastLogin: data.user?.lastLogin,
+      loginCount: data.user?.loginCount,
+      registrationSource: data.user?.registrationSource,
+    }
+
+    return { ok: true, user: authUser, serverMeta }
   }, [])
 
   const getPendingOtpEmail = useCallback(() => sessionStorage.getItem(OTP_EMAIL_KEY), [])

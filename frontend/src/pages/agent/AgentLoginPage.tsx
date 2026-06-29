@@ -10,6 +10,7 @@ import {
   AGENT_MUTED,
 } from '../../theme/agentTheme'
 import { Database } from '../../database/db'
+import { syncPartnersFromServer } from '../../utils/partnerSync'
 import {
   clearLoginAttempts,
   formatLockoutRemaining,
@@ -17,6 +18,8 @@ import {
   recordFailedLogin,
 } from '../../utils/adminLoginSecurity'
 import { setAgentSession } from '../../utils/agentSession'
+
+const WHATSAPP_URL = 'https://wa.me/971559641020'
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -27,12 +30,15 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
+type StatusCard = 'pending' | 'rejected' | null
+
 export default function AgentLoginPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [statusCard, setStatusCard] = useState<StatusCard>(null)
   const [shake, setShake] = useState(false)
   const [locked, setLocked] = useState(false)
   const [lockRemaining, setLockRemaining] = useState(0)
@@ -46,14 +52,23 @@ export default function AgentLoginPage() {
   }
 
   useEffect(() => {
+    void syncPartnersFromServer()
     refreshLockState()
     if (!locked) return
     const t = window.setInterval(refreshLockState, 1000)
     return () => window.clearInterval(t)
   }, [locked])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const showStatusCard = (card: StatusCard) => {
+    setStatusCard(card)
+    setError('')
+    setShake(true)
+    window.setTimeout(() => setShake(false), 500)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setStatusCard(null)
     refreshLockState()
     const lockState = getLoginLockState()
     if (lockState.locked) {
@@ -61,28 +76,94 @@ export default function AgentLoginPage() {
       return
     }
 
-    const partner = Database.getPartnerByCredentials(email.trim(), password)
-    if (partner && String(partner.status).toLowerCase() === 'active') {
+    const normalizedEmail = email.trim().toLowerCase()
+    const pwd = password
+
+    try {
+      const res = await fetch('/api/partners/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail, password: pwd }),
+      })
+      const payload = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        error?: string
+        partner?: Record<string, unknown>
+      }
+      if (res.ok && payload.ok && payload.partner) {
+        const merged = Database.mergePartner(payload.partner)
+        const status = String(merged.status ?? '').toLowerCase()
+        if (status === 'pending') {
+          showStatusCard('pending')
+          return
+        }
+        if (status === 'rejected') {
+          showStatusCard('rejected')
+          return
+        }
+        if (status === 'active') {
+          clearLoginAttempts()
+          setAgentSession(String(merged.id))
+          navigate(AGENT_BASE_PATH)
+          return
+        }
+      }
+      if (res.status === 403) {
+        showStatusCard('pending')
+        return
+      }
+    } catch {
+      /* try local credentials below */
+    }
+
+    await syncPartnersFromServer()
+    const partnerByEmail = Database.getPartners().find(
+      (p) =>
+        String(p.email ?? '').toLowerCase() === normalizedEmail
+        || String(p.username ?? '').toLowerCase() === normalizedEmail,
+    )
+    const partner = Database.getPartnerByCredentials(normalizedEmail, pwd)
+
+    if (!partner) {
+      if (partnerByEmail && String(partnerByEmail.status).toLowerCase() === 'pending') {
+        showStatusCard('pending')
+        return
+      }
+      if (partnerByEmail && String(partnerByEmail.status).toLowerCase() === 'rejected') {
+        showStatusCard('rejected')
+        return
+      }
+      const attempt = recordFailedLogin()
+      setLocked(attempt.locked)
+      setLockRemaining(attempt.remainingMs)
+      setAttemptsLeft(attempt.attemptsLeft)
+      setShake(true)
+      window.setTimeout(() => setShake(false), 500)
+      if (attempt.locked) {
+        setError(`Account locked for ${formatLockoutRemaining(attempt.remainingMs)} after too many failed attempts.`)
+      } else {
+        setError(`Invalid credentials. ${attempt.attemptsLeft} attempt${attempt.attemptsLeft === 1 ? '' : 's'} remaining.`)
+      }
+      return
+    }
+
+    const status = String(partner.status ?? '').toLowerCase()
+    if (status === 'pending') {
+      showStatusCard('pending')
+      return
+    }
+    if (status === 'rejected') {
+      showStatusCard('rejected')
+      return
+    }
+    if (status === 'active') {
       clearLoginAttempts()
       setAgentSession(String(partner.id))
       navigate(AGENT_BASE_PATH)
       return
     }
 
-    const attempt = recordFailedLogin()
-    setLocked(attempt.locked)
-    setLockRemaining(attempt.remainingMs)
-    setAttemptsLeft(attempt.attemptsLeft)
-    setShake(true)
-    window.setTimeout(() => setShake(false), 500)
-
-    if (partner && String(partner.status).toLowerCase() !== 'active') {
-      setError('Your account is pending approval. Contact your administrator.')
-    } else if (attempt.locked) {
-      setError(`Account locked for ${formatLockoutRemaining(attempt.remainingMs)} after too many failed attempts.`)
-    } else {
-      setError(`Invalid credentials. ${attempt.attemptsLeft} attempt${attempt.attemptsLeft === 1 ? '' : 's'} remaining.`)
-    }
+    setError('Invalid credentials')
   }
 
   return (
@@ -106,20 +187,95 @@ export default function AgentLoginPage() {
             </div>
           )}
 
+          {statusCard === 'pending' && (
+            <div
+              style={{
+                background: '#fff8e1',
+                border: '1px solid #fcd34d',
+                borderRadius: 16,
+                padding: 20,
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#92400e', marginBottom: 8 }}>
+                ⏳ Account Pending Approval
+              </div>
+              <p style={{ margin: '0 0 8px', fontSize: 13, color: '#78350f', lineHeight: 1.5 }}>
+                Your registration is being reviewed by Superjet Global.
+              </p>
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: '#78350f', lineHeight: 1.5 }}>
+                You&apos;ll receive your credentials once approved.
+              </p>
+              <a
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  background: '#25D366',
+                  color: '#fff',
+                  textDecoration: 'none',
+                  borderRadius: 8,
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                Follow up with us
+              </a>
+            </div>
+          )}
+
+          {statusCard === 'rejected' && (
+            <div
+              style={{
+                background: '#fff0f0',
+                border: '1px solid #fca5a5',
+                borderRadius: 16,
+                padding: 20,
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#b91c1c', marginBottom: 8 }}>
+                ❌ Application Not Approved
+              </div>
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: '#991b1b', lineHeight: 1.5 }}>
+                Please contact us for more information.
+              </p>
+              <a
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  background: '#25D366',
+                  color: '#fff',
+                  textDecoration: 'none',
+                  borderRadius: 8,
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                Contact us on WhatsApp
+              </a>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit}>
             <label style={{ display: 'block', fontSize: 13, color: AGENT_MUTED, marginBottom: 6, fontWeight: 500 }}>Email or Username</label>
             <div style={{ position: 'relative', marginBottom: 16 }}>
               <svg style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={AGENT_MUTED} strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
-              <input type="text" value={email} onChange={(e) => { setEmail(e.target.value); setError('') }} disabled={locked} autoComplete="username" style={{ ...inputStyle, paddingLeft: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} placeholder="Enter email or username" />
+              <input type="text" value={email} onChange={(e) => { setEmail(e.target.value); setError(''); setStatusCard(null) }} disabled={locked} autoComplete="username" style={{ ...inputStyle, paddingLeft: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} placeholder="Enter email or username" />
             </div>
             <label style={{ display: 'block', fontSize: 13, color: AGENT_MUTED, marginBottom: 6, fontWeight: 500 }}>Password</label>
             <div style={{ position: 'relative' }}>
               <svg style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={AGENT_MUTED} strokeWidth="1.8"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
-              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => { setPassword(e.target.value); setError('') }} disabled={locked} autoComplete="current-password" placeholder="Enter your password" style={{ ...inputStyle, paddingLeft: 44, paddingRight: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} />
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => { setPassword(e.target.value); setError(''); setStatusCard(null) }} disabled={locked} autoComplete="current-password" placeholder="Enter your password" style={{ ...inputStyle, paddingLeft: 44, paddingRight: 44, border: error ? '1px solid #fca5a5' : inputStyle.border, opacity: locked ? 0.6 : 1 }} />
               <button type="button" onClick={() => setShowPassword((s) => !s)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: AGENT_MUTED }}>{showPassword ? '🙈' : '👁'}</button>
             </div>
             {error && <p style={{ margin: '8px 0 0', color: AGENT_ERROR, fontSize: 13 }}>{error}</p>}
-            {!locked && !error && attemptsLeft < 5 && (
+            {!locked && !error && !statusCard && attemptsLeft < 5 && (
               <p style={{ margin: '8px 0 0', color: AGENT_MUTED, fontSize: 12 }}>{attemptsLeft} attempt{attemptsLeft === 1 ? '' : 's'} remaining before lockout</p>
             )}
             <button type="submit" disabled={locked} style={{ width: '100%', background: locked ? '#e8ecf0' : AGENT_GRADIENTS.welcomeShimmer, backgroundSize: '200% 200%', color: locked ? AGENT_MUTED : '#fff', border: 'none', borderRadius: 12, padding: 14, fontWeight: 700, fontSize: 14, marginTop: 20, cursor: locked ? 'not-allowed' : 'pointer', boxShadow: locked ? 'none' : '0 8px 24px rgba(37,99,235,0.35)' }}>Sign In</button>

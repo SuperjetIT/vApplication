@@ -148,6 +148,11 @@ export function applicationToLead(app: GenericRecord): AdminLead {
   if (paymentMethodRaw.includes('card')) paymentMethod = 'Card'
   else if (paymentMethodRaw.includes('bank')) paymentMethod = 'Bank Transfer'
 
+  const paymentStatusRaw = String(app.paymentStatus ?? 'pending').toLowerCase()
+  let paymentStatus: 'paid' | 'pending' | 'failed' = 'pending'
+  if (paymentStatusRaw === 'paid') paymentStatus = 'paid'
+  else if (paymentStatusRaw === 'failed') paymentStatus = 'failed'
+
   return {
     id: String(app.id),
     applicationId: String(app.id),
@@ -164,6 +169,7 @@ export function applicationToLead(app: GenericRecord): AdminLead {
     visaType: String(app.visaOption ?? 'Tourist'),
     invoiceNo,
     paymentMethod,
+    paymentStatus,
     amount: total,
     documentsComplete: !String(app.status).toLowerCase().includes('pending_docs'),
     agentId,
@@ -278,6 +284,10 @@ export function dbExpenseToAdmin(exp: GenericRecord): AdminExpense {
 
 export function loadLeadsFromDatabase(): AdminLead[] {
   return Database.getApplications()
+    .filter((app) => {
+      const t = String((app as GenericRecord).type ?? 'b2c').toLowerCase()
+      return t === 'b2c' || t === 'b2b'
+    })
     .map((app) => applicationToLead(app as GenericRecord))
     .sort((a, b) => {
       const appA = Database.getApplicationById(a.id)

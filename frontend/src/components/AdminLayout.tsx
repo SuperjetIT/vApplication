@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { BRAND, BRAND_BLUE, OPS_PRIMARY, OPS_SECONDARY, PAGE_BG, SIDEBAR_BG, BORDER, SUCCESS, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, cardStyle, inputStyle, primaryBtn, outlineBtn } from './admin/adminTheme'
 import { ADMIN_LOGIN_PATH, AGENT_BASE_PATH, OPERATIONS_BASE_PATH, OPERATIONS_LOGIN_PATH } from '../config/portalRoutes'
 import { clearPortalSession, getPortalRole, getPortalUser, isOperationsPath } from '../utils/portalAuth'
+import { validateAdminSession } from '../utils/sessionGuard'
 import './admin/adminResponsive.css'
 import { Database } from '../database/db'
 import { useDatabaseListener } from '../hooks/useDatabase'
@@ -15,17 +16,22 @@ import {
   type AdminCalendarEvent,
   type AdminNote,
 } from '../utils/adminStorage'
+import { syncPartnersFromServer } from '../utils/partnerSync'
+import { syncUsersFromServer } from '../utils/userSync'
+import { usePortalIdleTimeout } from '../hooks/usePortalIdleTimeout'
+import { syncApplicationsFromServer } from '../utils/applicationSync'
 import {
   buildSupportWhatsAppUrl,
   formatNotificationTimeAgo,
   getNotificationGradient,
 } from '../utils/adminNotifications'
 
-const SIDEBAR_W = 260
+const SIDEBAR_W = 220
 
 const NAV_ICONS: Record<string, ReactNode> = {
   Dashboard: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>,
   Leads: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
+  Applications: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>,
   Customers: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg>,
   Agents: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2z" /></svg>,
   Cases: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>,
@@ -35,35 +41,34 @@ const NAV_ICONS: Record<string, ReactNode> = {
   Reports: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>,
   'B2C Users': <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg>,
   'B2B Partners': <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2z" /></svg>,
+  'B2C Sign-ins': <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>,
+  Registrations: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></svg>,
+  'B2B Registrations': <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></svg>,
   Users: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
   Settings: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" /></svg>,
 }
 
 const NAV_DISPLAY: Record<string, string> = {
-  Leads: 'Applications',
-  Customers: 'B2C Users',
-  Agents: 'B2B Partners',
+  Applications: 'Applications',
   'B2C Users': 'B2C Users',
   'B2B Partners': 'B2B Partners',
+  Registrations: 'Registrations',
 }
 
 function buildNavSections(basePath: string, isOperations: boolean) {
   const sections = [
     { label: 'Overview', items: [{ path: basePath, label: 'Dashboard' }] },
     {
-      label: 'CRM',
+      label: 'Applications',
       items: [
-        { path: `${basePath}/leads`, label: 'Leads' },
-        { path: `${basePath}/customers`, label: 'Customers' },
-        { path: `${basePath}/agents`, label: 'Agents' },
+        { path: `${basePath}/leads`, label: 'Applications' },
+        { path: `${basePath}/customers`, label: 'B2C Users' },
+        { path: `${basePath}/agents`, label: 'B2B Partners' },
       ],
     },
     {
       label: 'Register',
-      items: [
-        { path: `${basePath}/register/b2c`, label: 'B2C Users' },
-        { path: `${basePath}/register/b2b`, label: 'B2B Partners' },
-      ],
+      items: [{ path: `${basePath}/registrations`, label: 'Registrations' }],
     },
     { label: 'Finance', items: [{ path: `${basePath}/wallet`, label: 'Wallet' }, { path: `${basePath}/invoices`, label: 'Invoices' }, { path: `${basePath}/payments`, label: 'Payments' }, { path: `${basePath}/expenses`, label: 'Expenses' }, { path: `${basePath}/reports`, label: 'Reports' }] },
   ]
@@ -118,6 +123,17 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
   )
 
   useEffect(() => {
+    const pull = () => {
+      void syncPartnersFromServer()
+      void syncUsersFromServer()
+      void syncApplicationsFromServer()
+    }
+    pull()
+    const interval = window.setInterval(pull, 30_000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
     if (prevUnreadRef.current === null) {
       prevUnreadRef.current = unreadCount
       return
@@ -130,6 +146,8 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
 
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
   const handleLogout = () => { clearPortalSession(); navigate(loginPath) }
+
+  usePortalIdleTimeout(isOperations, loginPath)
 
   useEffect(() => {
     saveNotes(notes)
@@ -157,7 +175,10 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
 
   const handleNotificationClick = (notif: (typeof adminNotifications)[0]) => {
     if (notif.id) Database.markNotificationRead(String(notif.id))
-    const linkPath = String(notif.linkPath ?? '')
+    let linkPath = String(notif.linkPath ?? '')
+    if (linkPath.startsWith('/admin') && isOperations) {
+      linkPath = linkPath.replace(/^\/admin/, OPERATIONS_BASE_PATH)
+    }
     if (linkPath) {
       setNotifOpen(false)
       navigate(linkPath)
@@ -188,10 +209,10 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
     display: 'flex',
     alignItems: 'center',
     gap: 10,
-    padding: '10px 16px',
+    padding: '8px 16px',
     borderRadius: 12,
     margin: '2px 8px',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: active ? 600 : 500,
     color: active ? BRAND : TEXT_SECONDARY,
     cursor: 'pointer',
@@ -203,7 +224,20 @@ export function AdminLayout({ activePath, title, children }: { activePath: strin
   })
 
   return (
-    <div className="admin-root" style={{ minHeight: '100vh', background: PAGE_BG, color: TEXT_PRIMARY }}>
+    <div className="admin-root" style={{ minHeight: '100vh', background: PAGE_BG, color: TEXT_PRIMARY, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+      <style>{`
+        @keyframes countUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes skeletonPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes float3d {
+          0%, 100% { transform: rotate(-8deg) translateY(0); }
+          50% { transform: rotate(-8deg) translateY(-10px); }
+        }
+        .admin-table-row { transition: background 0.15s ease; }
+        .admin-table-row:hover { background: #f8f9fc; }
+      `}</style>
 
       {mobileOpen && <div role="presentation" onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 999 }} />}
 
@@ -449,13 +483,13 @@ export function AdminGuard({ children }: { children: ReactNode }) {
   const role = getPortalRole()
   if (role === 'operations') return <Navigate to={OPERATIONS_BASE_PATH} replace />
   if (role === 'agent') return <Navigate to={AGENT_BASE_PATH} replace />
-  if (role !== 'admin') return <Navigate to={ADMIN_LOGIN_PATH} replace />
+  if (role !== 'admin' || !validateAdminSession()) return <Navigate to={ADMIN_LOGIN_PATH} replace />
   return children
 }
 
 export function OperationsGuard({ children }: { children: ReactNode }) {
   const role = getPortalRole()
   if (role === 'agent') return <Navigate to={AGENT_BASE_PATH} replace />
-  if (role !== 'operations') return <Navigate to={OPERATIONS_LOGIN_PATH} replace />
+  if (role !== 'operations' || !validateAdminSession()) return <Navigate to={OPERATIONS_LOGIN_PATH} replace />
   return children
 }

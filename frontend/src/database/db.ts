@@ -51,8 +51,27 @@ const defaultDb: DbShape = {
 
 let db: DbShape = { ...defaultDb }
 
-export const STORAGE_KEY = 'super_visa_db'
+import { STORAGE_KEY as STORE_KEY } from '../config/storageKeys'
+
+export { STORE_KEY as STORAGE_KEY }
 export const DB_CHANGED_EVENT = 'superVisaDbChanged'
+
+function ensureDbShape() {
+  if (!Array.isArray(db.users)) db.users = [...defaultDb.users]
+  if (!Array.isArray(db.partners)) db.partners = [...defaultDb.partners]
+  if (!Array.isArray(db.applications)) db.applications = [...defaultDb.applications]
+  if (!Array.isArray(db.operators)) db.operators = [...defaultDb.operators]
+  if (!Array.isArray(db.admins)) db.admins = [...defaultDb.admins]
+  if (!Array.isArray(db.invoices)) db.invoices = [...defaultDb.invoices]
+  if (!Array.isArray(db.payments)) db.payments = [...defaultDb.payments]
+  if (!Array.isArray(db.commissions)) db.commissions = [...defaultDb.commissions]
+  if (!Array.isArray(db.expenses)) db.expenses = [...defaultDb.expenses]
+  if (!Array.isArray(db.documents)) db.documents = [...defaultDb.documents]
+  if (!Array.isArray(db.notifications)) db.notifications = [...defaultDb.notifications]
+  if (!Array.isArray(db.activities)) db.activities = [...defaultDb.activities]
+  if (!Array.isArray(db.walletTransactions)) db.walletTransactions = [...defaultDb.walletTransactions]
+  if (!db.settings || typeof db.settings !== 'object') db.settings = { ...defaultDb.settings }
+}
 
 function ensureAdminsSeeded() {
   const defaultAdmin = adminsData.admins[0]
@@ -74,13 +93,14 @@ function ensureAdminsSeeded() {
 
 function loadFromStorage() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY)
+    const saved = localStorage.getItem(STORE_KEY)
     if (saved) {
       db = JSON.parse(saved) as DbShape
     }
   } catch {
     console.warn('Could not load DB from storage, using default JSON data')
   }
+  ensureDbShape()
   ensureAdminsSeeded()
   if (!Array.isArray(db.walletTransactions)) db.walletTransactions = []
 }
@@ -93,7 +113,7 @@ function notifyDbChanged() {
 
 function saveToStorage() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(db))
+    localStorage.setItem(STORE_KEY, JSON.stringify(db))
     notifyDbChanged()
   } catch (e) {
     console.error('Could not save DB to storage', e)
@@ -104,7 +124,7 @@ loadFromStorage()
 
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    if (e.key === STORAGE_KEY && e.newValue) {
+    if (e.key === STORE_KEY && e.newValue) {
       try {
         db = JSON.parse(e.newValue) as DbShape
         notifyDbChanged()
@@ -131,10 +151,32 @@ export const Database = {
   getUserById: (id: string) => db.users.find((u) => String(u.id) === id),
   getUserByEmail: (email: string) => db.users.find((u) => String(u.email) === email),
   createUser: (data: GenericRecord) => {
-    const newUser = { id: generateId('usr'), createdAt: new Date().toISOString(), walletBalance: 0, ...data }
+    const newUser = { id: generateId('usr'), createdAt: new Date().toISOString(), walletBalance: 0, loginCount: 1, ...data }
     db.users.push(newUser)
     saveToStorage()
     return newUser
+  },
+  mergeUser: (data: GenericRecord) => {
+    const email = String(data.email ?? '').trim().toLowerCase()
+    const idx = email
+      ? db.users.findIndex((u) => String(u.email ?? '').toLowerCase() === email)
+      : db.users.findIndex((u) => String(u.id) === String(data.id))
+    if (idx === -1) {
+      const user: GenericRecord = {
+        id: generateId('usr'),
+        createdAt: new Date().toISOString(),
+        walletBalance: 0,
+        loginCount: 1,
+        isVerified: true,
+        ...data,
+      }
+      db.users.push(user)
+      saveToStorage()
+      return user
+    }
+    db.users[idx] = { ...db.users[idx], ...data }
+    saveToStorage()
+    return db.users[idx]
   },
   updateUser: (id: string, updates: GenericRecord) => {
     const idx = db.users.findIndex((u) => String(u.id) === id)
@@ -142,6 +184,18 @@ export const Database = {
     db.users[idx] = { ...db.users[idx], ...updates }
     saveToStorage()
     return db.users[idx]
+  },
+  deleteUser: (id: string) => {
+    const idx = db.users.findIndex((u) => String(u.id) === id)
+    if (idx === -1) return null
+    const removed = db.users[idx]
+    db.users.splice(idx, 1)
+    saveToStorage()
+    if (localStorage.getItem('sv_usr_ref') === id) {
+      localStorage.removeItem('sv_usr_ref')
+      localStorage.removeItem('sv_usr_auth')
+    }
+    return removed
   },
 
   getPartners: () => db.partners,
@@ -153,6 +207,30 @@ export const Database = {
           || String(p.username ?? '').toLowerCase() === email.trim().toLowerCase())
         && String(p.password) === password,
     ) ?? null,
+  mergePartner: (data: GenericRecord) => {
+    const email = String(data.email ?? '').trim().toLowerCase()
+    const idx = email
+      ? db.partners.findIndex((p) => String(p.email ?? '').toLowerCase() === email)
+      : db.partners.findIndex((p) => String(p.id) === String(data.id))
+    if (idx === -1) {
+      const partner: GenericRecord = {
+        id: generateId('ptn'),
+        totalApplications: 0,
+        totalRevenue: 0,
+        totalCommission: 0,
+        walletBalance: 0,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        ...data,
+      }
+      db.partners.push(partner)
+      saveToStorage()
+      return partner
+    }
+    db.partners[idx] = { ...db.partners[idx], ...data }
+    saveToStorage()
+    return db.partners[idx]
+  },
   createPartner: (data: GenericRecord) => {
     const newPartner = {
       id: generateId('ptn'),
@@ -174,6 +252,18 @@ export const Database = {
     db.partners[idx] = { ...db.partners[idx], ...updates }
     saveToStorage()
     return db.partners[idx]
+  },
+  deletePartner: (id: string) => {
+    const idx = db.partners.findIndex((p) => String(p.id) === id)
+    if (idx === -1) return null
+    const removed = db.partners[idx]
+    db.partners.splice(idx, 1)
+    saveToStorage()
+    if (localStorage.getItem('sv_ptn_ref') === id) {
+      localStorage.removeItem('sv_ptn_auth')
+      localStorage.removeItem('sv_ptn_ref')
+    }
+    return removed
   },
   updatePartnerPassword: (id: string, password: string) => Database.updatePartner(id, { password }),
   getPartnerWalletBalance: (partnerId: string) => {
@@ -338,6 +428,30 @@ export const Database = {
       String(data.type ?? ''),
     )
     return newApp
+  },
+  mergeApplication: (data: GenericRecord) => {
+    const id = String(data.id ?? '')
+    const idx = id
+      ? db.applications.findIndex((a) => String(a.id) === id)
+      : -1
+    if (idx === -1) {
+      const now = new Date().toISOString()
+      const application: GenericRecord = {
+        id: id || generateId('app'),
+        createdAt: String(data.createdAt ?? now),
+        updatedAt: String(data.updatedAt ?? now),
+        timeline: Array.isArray(data.timeline)
+          ? data.timeline
+          : [{ status: 'submitted', timestamp: now, note: 'Application submitted' }],
+        ...data,
+      }
+      db.applications.push(application)
+      saveToStorage()
+      return application
+    }
+    db.applications[idx] = { ...db.applications[idx], ...data }
+    saveToStorage()
+    return db.applications[idx]
   },
   updateApplicationStatus: (id: string, status: string, note: string, updatedBy?: string) => {
     const idx = db.applications.findIndex((a) => String(a.id) === id)
@@ -614,12 +728,14 @@ export const Database = {
       totalWalletBalance:
         db.partners.reduce((sum, p) => sum + toNum(p.walletBalance ?? 0), 0)
         + db.users.reduce((sum, u) => sum + toNum(u.walletBalance ?? 0), 0),
+      b2cRegisteredUsers: db.users.length,
+      b2cUsersLoggedIn: db.users.filter((u) => Boolean(u.lastLogin)).length,
     }
   },
 
   resetDatabase: () => {
     try {
-      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(STORE_KEY)
     } catch (e) {
       console.error('Could not reset storage', e)
     }

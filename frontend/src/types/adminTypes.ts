@@ -29,6 +29,7 @@ export interface AdminLead {
   applicationId?: string
   invoiceNo?: string
   paymentMethod?: 'Card' | 'Bank Transfer'
+  paymentStatus?: 'paid' | 'pending' | 'failed'
   amount?: number
   documentsComplete?: boolean
   agentId?: string

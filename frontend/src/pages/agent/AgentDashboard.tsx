@@ -64,10 +64,44 @@ export default function AgentDashboard() {
     return { active, approved, pendingComm, monthRevenue, monthApps, paidComm }
   }, [myApplications, myCommissions])
 
-  const popular = useMemo(
-    () => countries.filter((c) => c.visaOptions.length > 0).slice(0, 8),
-    [],
-  )
+  const popular = useMemo(() => {
+    const passportSlugs: Record<string, string[]> = {
+      India: ['india'],
+      UAE: ['uae'],
+      'United Arab Emirates': ['uae'],
+      'United Kingdom': ['uk'],
+      USA: ['united-states'],
+      'United States': ['united-states'],
+      Pakistan: ['pakistan'],
+      Philippines: ['philippines'],
+      Kenya: ['kenya'],
+      Malaysia: ['malaysia'],
+      Egypt: ['egypt'],
+      Indonesia: ['indonesia'],
+      Thailand: ['thailand'],
+      Vietnam: ['vietnam'],
+      Canada: ['canada'],
+      Australia: ['australia'],
+      'Saudi Arabia': ['saudi-arabia'],
+      Singapore: ['singapore'],
+      Brazil: ['brazil'],
+      'South Korea': ['south-korea'],
+      Japan: ['japan'],
+      France: ['france'],
+    }
+    const passportCountry = String(partner?.passportCountry ?? partner?.residenceCountry ?? '').trim()
+    const slugsToHide = passportSlugs[passportCountry] || []
+    return countries
+      .filter((c) => c.visaOptions.length > 0)
+      .filter((c) => {
+        if (!passportCountry) return true
+        return (
+          c.name.toLowerCase() !== passportCountry.toLowerCase() &&
+          !slugsToHide.includes(c.slug)
+        )
+      })
+      .slice(0, 8)
+  }, [partner])
   const recent = useMemo(
     () => [...myApplications].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 5),
     [myApplications],
