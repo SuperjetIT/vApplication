@@ -8,6 +8,8 @@ const frontendRoot = path.dirname(fileURLToPath(import.meta.url))
 // https://vite.dev/config/
 export default defineConfig({
   root: frontendRoot,
+  // Load `.env` from repo root (API + Vite share one file)
+  envDir: path.resolve(frontendRoot, '..'),
   plugins: [react()],
   server: {
     host: '127.0.0.1',

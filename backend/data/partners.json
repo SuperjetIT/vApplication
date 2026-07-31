@@ -1,3 +1,24 @@
 {
-  "partners": []
+  "partners": [
+    {
+      "id": "ptn_1785499749967_jurck",
+      "createdAt": "2026-07-31T12:09:09.967Z",
+      "totalApplications": 0,
+      "totalRevenue": 0,
+      "totalCommission": 0,
+      "walletBalance": 0,
+      "status": "pending",
+      "registrationSource": "self_service",
+      "companyName": "telwin agency",
+      "contactPerson": "telwin",
+      "email": "marketing@superjetgroup.com",
+      "username": "marketing@superjetgroup.com",
+      "phone": "+971559962051",
+      "tradeLicence": "78474785",
+      "password": "",
+      "commissionRate": 15,
+      "countriesSold": [],
+      "registrationMethod": "self_registered"
+    }
+  ]
 }

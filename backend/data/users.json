@@ -127,6 +127,22 @@
       "loginCount": 1,
       "isVerified": true,
       "walletBalance": 0
+    },
+    {
+      "id": "usr_1785498319669_3leb2",
+      "email": "ashiq6259@gmail.com",
+      "fullName": "Kamal Batcha",
+      "phone": "",
+      "phoneCode": "+971",
+      "passportCountry": "India",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Work Visa",
+      "registrationSource": "sign_in",
+      "createdAt": "2026-07-31T11:45:19.669Z",
+      "lastLogin": "2026-07-31T11:46:45.208Z",
+      "loginCount": 1,
+      "isVerified": true,
+      "walletBalance": 0
     }
   ]
 }

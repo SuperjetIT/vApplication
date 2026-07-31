@@ -118,9 +118,13 @@ function ensureAdminsSeeded() {
     return
   }
   const current = db.admins[idx]
-  const nextPassword =
-    String(current.password ?? '').trim() || seedPassword || String(defaultAdmin.password ?? '')
-  if (!current.username || !String(current.password ?? '').trim()) {
+  const storedPassword = String(current.password ?? '').trim()
+  // Env demo password is source of truth when set (staging / local).
+  const nextPassword = seedPassword || storedPassword || String(defaultAdmin.password ?? '')
+  const needsUpdate =
+    !current.username
+    || storedPassword !== nextPassword
+  if (needsUpdate) {
     db.admins[idx] = {
       ...defaultAdmin,
       ...current,
@@ -672,13 +676,25 @@ export const Database = {
     const input = emailOrUsername.trim().toLowerCase()
     const pwd = password.trim()
     if (!input || !pwd) return null
-    return (
+    const demoPwd = demoAdminPassword()
+    const admin =
       db.admins.find((a) => {
         const email = String(a.email ?? '').toLowerCase()
         const username = String(a.username ?? 'superadmin').toLowerCase()
-        return (email === input || username === input) && String(a.password) === pwd
+        if (email !== input && username !== input) return false
+        const stored = String(a.password ?? '')
+        return stored === pwd || (Boolean(demoPwd) && demoPwd === pwd)
       }) ?? null
-    )
+    // Keep stored password in sync with demo env when login succeeds via env.
+    if (admin && demoPwd && demoPwd === pwd && String(admin.password ?? '') !== pwd) {
+      const idx = db.admins.findIndex((a) => String(a.id) === String(admin.id))
+      if (idx !== -1) {
+        db.admins[idx] = { ...db.admins[idx], password: pwd }
+        saveToStorage()
+        return db.admins[idx]
+      }
+    }
+    return admin
   },
   updateAdminPassword: (email: string, password: string) => {
     const normalized = email.trim().toLowerCase()

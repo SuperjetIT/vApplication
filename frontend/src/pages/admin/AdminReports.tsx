@@ -3,7 +3,10 @@ import * as XLSX from 'xlsx'
 import { AdminLayout } from '../../components/AdminLayout'
 import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BRAND_BLUE, BORDER, cardStyle, hoverCardProps, inputStyle, PAGE_BG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
-import { MOCK_AGENTS, MOCK_CUSTOMERS, MOCK_LEADS, MOCK_PAYMENTS } from '../../data/adminMockData'
+import { Database } from '../../database/db'
+import { loadLeads } from '../../utils/b2cFlow'
+import { loadOperationUsers } from '../../utils/operationsAuth'
+import { useDatabaseListener } from '../../hooks/useDatabase'
 
 const REPORTS = [
   { id: 'leads', title: 'All Applications Report', desc: 'Complete application pipeline with status and source', gradient: `linear-gradient(90deg, ${BRAND}, #ff6b6b)`, icon: '📋', iconBg: 'linear-gradient(135deg,#fff0f0,#ffe4e4)' },
@@ -31,12 +34,63 @@ function generateReport(reportId: string) {
   const date = new Date().toISOString().slice(0, 10)
   let data: Record<string, unknown>[] = []
   switch (reportId) {
-    case 'leads': data = MOCK_LEADS.map((l) => ({ Name: l.name, Email: l.email, Destination: l.destination, Status: l.status, Source: l.source })); break
-    case 'payments': data = MOCK_PAYMENTS.map((p) => ({ TxnID: p.txnId, 'B2C User': p.customer, Amount: p.amount, Status: p.status, Date: p.date })); break
-    case 'commission': data = MOCK_AGENTS.map((a) => ({ 'B2B Partner': a.name, Applications: a.leads, Revenue: a.revenue, 'Partner Commission': a.commission })); break
-    case 'customers': data = MOCK_CUSTOMERS.map((c) => ({ Name: c.name, Email: c.email, Applications: c.applications, TotalSpent: c.totalSpent })); break
-    case 'demand': data = [{ Country: 'Schengen', Applications: 89 }, { Country: 'UK', Applications: 67 }, { Country: 'USA', Applications: 54 }]; break
-    case 'staff': data = [{ Staff: 'Sara M.', 'Applications Handled': 45, Approved: 38 }, { Staff: 'John D.', 'Applications Handled': 52, Approved: 41 }]; break
+    case 'leads':
+      data = loadLeads().map((l) => ({
+        Name: l.name,
+        Email: l.email,
+        Destination: l.destination,
+        Status: l.status,
+        Source: l.source,
+      }))
+      break
+    case 'payments':
+      data = Database.getPayments().map((p) => ({
+        TxnID: p.txnId ?? p.id,
+        'B2C User': p.customerName ?? p.userId ?? '',
+        Amount: p.amount,
+        Status: p.status,
+        Date: p.createdAt ?? p.date ?? '',
+      }))
+      break
+    case 'commission':
+      data = Database.getPartners().map((a) => ({
+        'B2B Partner': a.companyName ?? a.name,
+        Applications: a.totalApplications ?? 0,
+        Revenue: a.totalRevenue ?? 0,
+        'Partner Commission': a.totalCommission ?? 0,
+      }))
+      break
+    case 'customers':
+      data = Database.getUsers().map((c) => ({
+        Name: c.fullName ?? c.name,
+        Email: c.email,
+        Applications: Database.getApplications().filter((app) => String(app.userId) === String(c.id)).length,
+        TotalSpent: c.walletBalance ?? 0,
+      }))
+      break
+    case 'demand': {
+      const counts: Record<string, number> = {}
+      for (const l of loadLeads()) {
+        const dest = l.destination || 'Unknown'
+        counts[dest] = (counts[dest] ?? 0) + 1
+      }
+      data = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([Country, Applications]) => ({ Country, Applications }))
+      break
+    }
+    case 'staff':
+      data = loadOperationUsers().map((s) => ({
+        Staff: s.name,
+        Email: s.email,
+        Status: s.status,
+        Created: s.created,
+        'Last Login': s.lastLogin,
+      }))
+      break
+  }
+  if (data.length === 0) {
+    data = [{ Note: 'No data yet' }]
   }
   const ws = XLSX.utils.json_to_sheet(data)
   const wb = XLSX.utils.book_new()
@@ -45,6 +99,7 @@ function generateReport(reportId: string) {
 }
 
 export default function AdminReports() {
+  useDatabaseListener()
   const [toast, setToast] = useState<string | null>(null)
   const [dateRanges, setDateRanges] = useState<Record<string, { from: string; to: string }>>({})
   const [lastGenerated, setLastGenerated] = useState<Record<string, string>>({})

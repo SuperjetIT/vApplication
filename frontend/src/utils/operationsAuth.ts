@@ -1,10 +1,9 @@
-import { MOCK_USERS, type AdminUser } from '../data/adminMockData'
+import { type AdminUser } from '../data/adminMockData'
 import { SUPER_ADMIN_EMAIL } from './adminAuth'
 import { clearPortalSession, getPortalRole, getPortalUser } from './portalAuth'
-import { demoOpsPassword } from '../config/demoSeed'
 
-const STORAGE_KEY = 'admin_operation_users'
-const DELETED_KEY = 'admin_operation_users_deleted'
+const STORAGE_KEY = 'sv_ops_users_v1'
+const DELETED_KEY = 'sv_ops_users_deleted_v1'
 
 export type OperationStaffUser = AdminUser & { password: string }
 
@@ -28,44 +27,27 @@ function isDeletedUser(user: OperationStaffUser, deleted: Set<string>): boolean 
   return deleted.has(user.id) || deleted.has(user.email.toLowerCase()) || deleted.has(user.username.toLowerCase())
 }
 
-const DEFAULT_OPS = (): OperationStaffUser[] => {
-  const seed = demoOpsPassword()
-  return MOCK_USERS.filter((u) => u.email !== SUPER_ADMIN_EMAIL).map((u) => ({
-    ...u,
-    password: String(u.password ?? '').trim() || seed,
-  }))
-}
-
+/** No demo staff — only users created in Admin → Users. */
 export function loadOperationUsers(): OperationStaffUser[] {
   const deleted = loadDeletedKeys()
-  const defaults = DEFAULT_OPS().filter((u) => !isDeletedUser(u, deleted))
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as OperationStaffUser[]
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const merged = defaults.map((def) => {
-          const stored = parsed.find((p) => p.id === def.id || p.email.toLowerCase() === def.email.toLowerCase())
-          if (!stored) return def
-          return {
-            ...def,
-            ...stored,
-            password: stored.password || def.password,
-          }
-        })
-        const extras = parsed
-          .filter((p) => !defaults.some((d) => d.id === p.id || d.email.toLowerCase() === p.email.toLowerCase()))
+      if (Array.isArray(parsed)) {
+        const result = parsed
+          .filter((u) => u && String(u.email ?? '').toLowerCase() !== SUPER_ADMIN_EMAIL)
           .map((p) => ({ ...p, password: p.password || p.username }))
-        const result = [...merged, ...extras].filter((u) => !isDeletedUser(u, deleted))
+          .filter((u) => !isDeletedUser(u, deleted))
         saveOperationUsers(result)
         return result
       }
     }
   } catch {
-    /* fall through to defaults */
+    /* fall through */
   }
-  saveOperationUsers(defaults)
-  return defaults
+  saveOperationUsers([])
+  return []
 }
 
 export function saveOperationUsers(users: OperationStaffUser[]) {

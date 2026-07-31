@@ -1,5 +1,6 @@
 /** Obfuscated localStorage keys — migrate legacy names on startup. */
-export const STORAGE_KEY = 'sv_store_v1'
+/** Bump when seed shape changes so stale localStorage demos are not reused. */
+export const STORAGE_KEY = 'sv_store_v3'
 export const ADMIN_AUTH_KEY = 'sv_adm_auth'
 export const ADMIN_REF_KEY = 'sv_adm_ref'
 export const ADMIN_EXP_KEY = 'sv_adm_exp'

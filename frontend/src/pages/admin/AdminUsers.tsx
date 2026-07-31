@@ -3,7 +3,7 @@ import { AdminLayout } from '../../components/AdminLayout'
 import { AdminAvatar } from '../../components/admin/AdminAvatar'
 import { AdminToast } from '../../components/admin/AdminToast'
 import { BRAND, BRAND_BLUE, BORDER, cardStyle, hoverCardProps, inputStyle, outlineBtn, PAGE_BG, primaryBtn, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from '../../components/admin/adminTheme'
-import { MOCK_USERS, type AdminUser } from '../../data/adminMockData'
+import { type AdminUser } from '../../data/adminMockData'
 import {
   deleteOperationUser,
   loadOperationUsers,
@@ -26,8 +26,18 @@ function randomUsername(name: string): string {
 export default function AdminUsers() {
   const [users, setUsers] = useState<OperationStaffUser[]>(() => {
     const stored = loadOperationUsers()
-    const admin = MOCK_USERS.find((u) => u.email === 'admin@superjetglobal.com')
-    return admin ? [admin as OperationStaffUser, ...stored] : stored
+    const admin: OperationStaffUser = {
+      id: '1',
+      name: 'Super Admin',
+      email: 'admin@superjetglobal.com',
+      username: 'superadmin',
+      password: '',
+      role: 'Admin',
+      status: 'Active',
+      created: '2025-01-15',
+      lastLogin: '—',
+    }
+    return [admin, ...stored]
   })
   const [showCreate, setShowCreate] = useState(false)
   const [showReset, setShowReset] = useState<AdminUser | null>(null)
