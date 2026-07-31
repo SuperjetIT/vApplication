@@ -223,7 +223,6 @@ export default function AdminSettings() {
 
   const [passportOcrApi, setPassportOcrApi] = useState(() => ({
     enabled: Boolean(readIntegration('passportOcrApi').enabled),
-    apiKey: String(readIntegration('passportOcrApi').apiKey ?? ''),
     autoFill: readIntegration('passportOcrApi').autoFill !== false,
   }))
 
@@ -232,8 +231,6 @@ export default function AdminSettings() {
     return {
       enabled: Boolean(raw.enabled),
       publishableKey: String(raw.publishableKey ?? ''),
-      secretKey: raw.secretKey ? MASKED_SECRET : '',
-      webhookSecret: raw.webhookSecret ? MASKED_SECRET : '',
       testMode: raw.testMode !== false,
     }
   }
@@ -250,16 +247,13 @@ export default function AdminSettings() {
   }, [])
 
   const saveStripeSettings = useCallback(() => {
-    const payload: IntegrationRecord = {
+    Database.updateIntegrationSettings('stripe', {
       enabled: stripe.enabled,
       publishableKey: stripe.publishableKey.trim(),
       testMode: stripe.testMode,
-    }
-    if (!isMaskedSecret(stripe.secretKey)) payload.secretKey = stripe.secretKey.trim()
-    if (!isMaskedSecret(stripe.webhookSecret)) payload.webhookSecret = stripe.webhookSecret.trim()
-    Database.updateIntegrationSettings('stripe', payload)
+    })
     setStripe(loadStripeSettings())
-    setToast('Stripe settings saved')
+    setToast('Stripe settings saved (publishable key only — secrets stay on the server)')
   }, [stripe])
 
   const [ocrTestFile, setOcrTestFile] = useState<File | null>(null)
@@ -438,7 +432,7 @@ export default function AdminSettings() {
     setOcrProgress(0)
     try {
       if (ocrEngine === 'passport-api') {
-        const data = await scanPassportViaApi(ocrTestFile, passportOcrApi.apiKey, setOcrProgress)
+        const data = await scanPassportViaApi(ocrTestFile, setOcrProgress)
         setOcrResult(JSON.stringify(data, null, 2))
         setToast('Passport OCR API test complete')
       } else {
@@ -480,18 +474,10 @@ export default function AdminSettings() {
               onChange={(publishableKey) => setStripe((s) => ({ ...s, publishableKey }))}
               placeholder="pk_test_..."
             />
-            <MaskedField
-              label="Secret Key"
-              value={stripe.secretKey}
-              onChange={(secretKey) => setStripe((s) => ({ ...s, secretKey }))}
-              placeholder="sk_test_..."
-            />
-            <MaskedField
-              label="Webhook Secret"
-              value={stripe.webhookSecret}
-              onChange={(webhookSecret) => setStripe((s) => ({ ...s, webhookSecret }))}
-              placeholder="whsec_..."
-            />
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: TEXT_MUTED, lineHeight: 1.5 }}>
+              Secret key and webhook secret must be set on the <strong>server</strong> only
+              (<code>STRIPE_SECRET_KEY</code>, <code>STRIPE_WEBHOOK_SECRET</code>) — never stored in the browser.
+            </p>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: TEXT_SECONDARY }}>
               <input
                 type="checkbox"
@@ -732,12 +718,10 @@ export default function AdminSettings() {
                 color="#22c55e"
               />
             </div>
-            <MaskedField
-              label="API Key"
-              value={passportOcrApi.apiKey}
-              onChange={(apiKey) => setPassportOcrApi((p) => ({ ...p, apiKey }))}
-              placeholder="Your omkar.cloud API key"
-            />
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: TEXT_MUTED, lineHeight: 1.5 }}>
+              API key is server-only. Set <code>PASSPORT_OCR_API_KEY</code> in the backend environment.
+              The browser never stores or sends this secret.
+            </p>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: TEXT_SECONDARY, marginBottom: 16 }}>
               <input
                 type="checkbox"
@@ -746,8 +730,8 @@ export default function AdminSettings() {
               />
               Auto-fill traveler fields after passport scan
             </label>
-            <button type="button" onClick={() => { Database.updateIntegrationSettings('passportOcrApi', passportOcrApi); setToast('Passport OCR API saved') }} style={{ ...primaryBtn, width: '100%' }}>
-              Save API key
+            <button type="button" onClick={() => { Database.updateIntegrationSettings('passportOcrApi', { enabled: passportOcrApi.enabled, autoFill: passportOcrApi.autoFill }); setToast('Passport OCR settings saved') }} style={{ ...primaryBtn, width: '100%' }}>
+              Save OCR settings
             </button>
             {passportOcrApi.enabled && (
               <p style={{ fontSize: 11, color: '#166534', marginTop: 12, marginBottom: 0 }}>

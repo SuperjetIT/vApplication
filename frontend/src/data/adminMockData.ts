@@ -45,7 +45,7 @@ export interface AdminCustomer {
   name: string
   email: string
   username: string
-  password: string
+  password?: string
   phone: string
   nationality: string
   applications: number
@@ -59,7 +59,7 @@ export interface AdminAgent {
   name: string
   email: string
   username: string
-  password: string
+  password?: string
   leads: number
   revenue: number
   commission: number
@@ -209,32 +209,32 @@ export const MOCK_LEADS: AdminLead[] = [
 ]
 
 export const MOCK_CUSTOMERS: AdminCustomer[] = [
-  { id: '1', name: 'Ahmed Hassan', email: 'ahmed.h@email.com', username: 'ahmedhassan', password: 'B2C@Ah3xK9', phone: '+971 50 123 4567', nationality: 'India', applications: 3, totalSpent: 1386, lastActive: '2 min ago' },
-  { id: '2', name: 'Priya Sharma', email: 'priya.s@email.com', username: 'priyasharma', password: 'B2C@Ps7mN2', phone: '+971 55 234 5678', nationality: 'India', applications: 2, totalSpent: 924, lastActive: '1 hr ago' },
-  { id: '3', name: 'Mohammed Ali', email: 'm.ali@email.com', username: 'mohammedali', password: 'B2C@Ma5pQ8', phone: '+971 52 345 6789', nationality: 'Pakistan', applications: 1, totalSpent: 462, lastActive: '3 hr ago' },
-  { id: '4', name: 'Sarah Johnson', email: 'sarah.j@email.com', username: 'sarahjohnson', password: 'B2C@Sj4rT1', phone: '+971 56 456 7890', nationality: 'USA', applications: 4, totalSpent: 2100, lastActive: '5 hr ago' },
-  { id: '5', name: 'Ravi Kumar', email: 'ravi.k@email.com', username: 'ravikumar', password: 'B2C@Rk6wU3', phone: '+971 54 567 8901', nationality: 'India', applications: 2, totalSpent: 843, lastActive: '1 day ago' },
-  { id: '6', name: 'Fatima Al Mansouri', email: 'fatima@email.com', username: 'fatima_m', password: 'B2C@Fm8yV5', phone: '+971 50 678 9012', nationality: 'UAE', applications: 1, totalSpent: 385, lastActive: '2 days ago' },
-  { id: '7', name: 'James Wilson', email: 'j.wilson@email.com', username: 'jameswilson', password: 'B2C@Jw2zA7', phone: '+971 55 789 0123', nationality: 'UK', applications: 3, totalSpent: 1575, lastActive: '2 days ago' },
-  { id: '8', name: 'Lina Farouk', email: 'lina.f@email.com', username: 'linafarouk', password: 'B2C@Lf9bC4', phone: '+971 52 890 1234', nationality: 'Egypt', applications: 1, totalSpent: 320, lastActive: '3 days ago' },
-  { id: '9', name: 'Chen Wei', email: 'chen.w@email.com', username: 'chenwei', password: 'B2C@Cw1dE6', phone: '+971 56 901 2345', nationality: 'China', applications: 2, totalSpent: 1100, lastActive: '4 days ago' },
-  { id: '10', name: 'Omar Siddiqui', email: 'omar.s@email.com', username: 'omarsiddiqui', password: 'B2C@Os3fG8', phone: '+971 54 012 3456', nationality: 'Bangladesh', applications: 1, totalSpent: 275, lastActive: '5 days ago' },
-  { id: '11', name: 'Emily Brown', email: 'emily.b@email.com', username: 'emilybrown', password: 'B2C@Eb5hJ2', phone: '+971 50 123 7890', nationality: 'USA', applications: 2, totalSpent: 650, lastActive: '1 week ago' },
-  { id: '12', name: 'Hassan Malik', email: 'h.malik@email.com', username: 'hassanmalik', password: 'B2C@Hm7kL9', phone: '+971 55 234 8901', nationality: 'Pakistan', applications: 1, totalSpent: 520, lastActive: '1 week ago' },
-  { id: '13', name: 'Nadia Petrova', email: 'nadia.p@email.com', username: 'nadiapetrova', password: 'B2C@Np4mN1', phone: '+971 52 345 9012', nationality: 'Russia', applications: 1, totalSpent: 410, lastActive: '2 weeks ago' },
-  { id: '14', name: 'Kevin Okafor', email: 'kevin.o@email.com', username: 'kevinokafor', password: 'B2C@Ko6pQ3', phone: '+971 56 456 0123', nationality: 'Nigeria', applications: 2, totalSpent: 890, lastActive: '2 weeks ago' },
-  { id: '15', name: 'Maria Santos', email: 'maria.s@email.com', username: 'mariasantos', password: 'B2C@Ms8rS5', phone: '+971 54 567 1234', nationality: 'Philippines', applications: 3, totalSpent: 1200, lastActive: '3 weeks ago' },
+  { id: '1', name: 'Ahmed Hassan', email: 'ahmed.h@email.com', username: 'ahmedhassan', phone: '+971 50 123 4567', nationality: 'India', applications: 3, totalSpent: 1386, lastActive: '2 min ago' },
+  { id: '2', name: 'Priya Sharma', email: 'priya.s@email.com', username: 'priyasharma', phone: '+971 55 234 5678', nationality: 'India', applications: 2, totalSpent: 924, lastActive: '1 hr ago' },
+  { id: '3', name: 'Mohammed Ali', email: 'm.ali@email.com', username: 'mohammedali', phone: '+971 52 345 6789', nationality: 'Pakistan', applications: 1, totalSpent: 462, lastActive: '3 hr ago' },
+  { id: '4', name: 'Sarah Johnson', email: 'sarah.j@email.com', username: 'sarahjohnson', phone: '+971 56 456 7890', nationality: 'USA', applications: 4, totalSpent: 2100, lastActive: '5 hr ago' },
+  { id: '5', name: 'Ravi Kumar', email: 'ravi.k@email.com', username: 'ravikumar', phone: '+971 54 567 8901', nationality: 'India', applications: 2, totalSpent: 843, lastActive: '1 day ago' },
+  { id: '6', name: 'Fatima Al Mansouri', email: 'fatima@email.com', username: 'fatima_m', phone: '+971 50 678 9012', nationality: 'UAE', applications: 1, totalSpent: 385, lastActive: '2 days ago' },
+  { id: '7', name: 'James Wilson', email: 'j.wilson@email.com', username: 'jameswilson', phone: '+971 55 789 0123', nationality: 'UK', applications: 3, totalSpent: 1575, lastActive: '2 days ago' },
+  { id: '8', name: 'Lina Farouk', email: 'lina.f@email.com', username: 'linafarouk', phone: '+971 52 890 1234', nationality: 'Egypt', applications: 1, totalSpent: 320, lastActive: '3 days ago' },
+  { id: '9', name: 'Chen Wei', email: 'chen.w@email.com', username: 'chenwei', phone: '+971 56 901 2345', nationality: 'China', applications: 2, totalSpent: 1100, lastActive: '4 days ago' },
+  { id: '10', name: 'Omar Siddiqui', email: 'omar.s@email.com', username: 'omarsiddiqui', phone: '+971 54 012 3456', nationality: 'Bangladesh', applications: 1, totalSpent: 275, lastActive: '5 days ago' },
+  { id: '11', name: 'Emily Brown', email: 'emily.b@email.com', username: 'emilybrown', phone: '+971 50 123 7890', nationality: 'USA', applications: 2, totalSpent: 650, lastActive: '1 week ago' },
+  { id: '12', name: 'Hassan Malik', email: 'h.malik@email.com', username: 'hassanmalik', phone: '+971 55 234 8901', nationality: 'Pakistan', applications: 1, totalSpent: 520, lastActive: '1 week ago' },
+  { id: '13', name: 'Nadia Petrova', email: 'nadia.p@email.com', username: 'nadiapetrova', phone: '+971 52 345 9012', nationality: 'Russia', applications: 1, totalSpent: 410, lastActive: '2 weeks ago' },
+  { id: '14', name: 'Kevin Okafor', email: 'kevin.o@email.com', username: 'kevinokafor', phone: '+971 56 456 0123', nationality: 'Nigeria', applications: 2, totalSpent: 890, lastActive: '2 weeks ago' },
+  { id: '15', name: 'Maria Santos', email: 'maria.s@email.com', username: 'mariasantos', phone: '+971 54 567 1234', nationality: 'Philippines', applications: 3, totalSpent: 1200, lastActive: '3 weeks ago' },
 ]
 
 export const MOCK_AGENTS: AdminAgent[] = [
-  { id: '1', name: 'Mohammed Travel', email: 'info@mohammedtravel.ae', username: 'mohammedtravel', password: 'B2B@Mt24xK', leads: 24, revenue: 8400, commission: 840, status: 'Active' },
-  { id: '2', name: 'Al Faris Agency', email: 'contact@alfaris.ae', username: 'alfaris_agency', password: 'B2B@Af18mP', leads: 18, revenue: 6300, commission: 630, status: 'Active' },
-  { id: '3', name: 'Gulf Visa Center', email: 'hello@gulfvisa.ae', username: 'gulfvisa', password: 'B2B@Gv15nQ', leads: 15, revenue: 5250, commission: 525, status: 'Active' },
-  { id: '4', name: 'Dubai Travel Co.', email: 'sales@dubaitravel.ae', username: 'dubaitravel', password: 'B2B@Dt12wR', leads: 12, revenue: 4200, commission: 420, status: 'Active' },
-  { id: '5', name: 'Emirates Visa Hub', email: 'support@evhub.ae', username: 'evhub_uae', password: 'B2B@Ev10yS', leads: 10, revenue: 3500, commission: 350, status: 'Active' },
-  { id: '6', name: 'Global Pathways', email: 'info@globalpath.ae', username: 'globalpath', password: 'B2B@Gp08zT', leads: 8, revenue: 2800, commission: 280, status: 'Inactive' },
-  { id: '7', name: 'Visa Express UAE', email: 'team@visaexpress.ae', username: 'visaexpress', password: 'B2B@Vx07aU', leads: 7, revenue: 2450, commission: 245, status: 'Active' },
-  { id: '8', name: 'Horizon Travels', email: 'book@horizon.ae', username: 'horizon_ae', password: 'B2B@Hz05bV', leads: 5, revenue: 1750, commission: 175, status: 'Active' },
+  { id: '1', name: 'Mohammed Travel', email: 'info@mohammedtravel.ae', username: 'mohammedtravel', leads: 24, revenue: 8400, commission: 840, status: 'Active' },
+  { id: '2', name: 'Al Faris Agency', email: 'contact@alfaris.ae', username: 'alfaris_agency', leads: 18, revenue: 6300, commission: 630, status: 'Active' },
+  { id: '3', name: 'Gulf Visa Center', email: 'hello@gulfvisa.ae', username: 'gulfvisa', leads: 15, revenue: 5250, commission: 525, status: 'Active' },
+  { id: '4', name: 'Dubai Travel Co.', email: 'sales@dubaitravel.ae', username: 'dubaitravel', leads: 12, revenue: 4200, commission: 420, status: 'Active' },
+  { id: '5', name: 'Emirates Visa Hub', email: 'support@evhub.ae', username: 'evhub_uae', leads: 10, revenue: 3500, commission: 350, status: 'Active' },
+  { id: '6', name: 'Global Pathways', email: 'info@globalpath.ae', username: 'globalpath', leads: 8, revenue: 2800, commission: 280, status: 'Inactive' },
+  { id: '7', name: 'Visa Express UAE', email: 'team@visaexpress.ae', username: 'visaexpress', leads: 7, revenue: 2450, commission: 245, status: 'Active' },
+  { id: '8', name: 'Horizon Travels', email: 'book@horizon.ae', username: 'horizon_ae', leads: 5, revenue: 1750, commission: 175, status: 'Active' },
 ]
 
 export const MOCK_INVOICES: AdminInvoice[] = [
@@ -300,10 +300,10 @@ export const MOCK_ACTIVITIES: AdminActivity[] = [
 ]
 
 export const MOCK_USERS: AdminUser[] = [
-  { id: '1', name: 'Super Admin', email: 'admin@superjetglobal.com', username: 'superadmin', password: 'demoadminsjt', role: 'Admin', status: 'Active', created: '2025-01-15', lastLogin: '2026-06-03' },
-  { id: '2', name: 'Sara Malik', email: 'sara@superjetglobal.com', username: 'sara042', password: 'sara042', role: 'Operations', status: 'Active', created: '2025-03-20', lastLogin: '2026-06-02' },
-  { id: '3', name: 'John Davidson', email: 'john@superjetglobal.com', username: 'john187', password: 'john187', role: 'Operations', status: 'Active', created: '2025-04-10', lastLogin: '2026-06-01' },
-  { id: '4', name: 'Ahmed Khan', email: 'ahmed@superjetglobal.com', username: 'ahmed329', password: 'ahmed329', role: 'Operations', status: 'Inactive', created: '2025-06-05', lastLogin: '2026-05-15' },
+  { id: '1', name: 'Super Admin', email: 'admin@superjetglobal.com', username: 'superadmin', role: 'Admin', status: 'Active', created: '2025-01-15', lastLogin: '2026-06-03' },
+  { id: '2', name: 'Sara Malik', email: 'sara@superjetglobal.com', username: 'sara042', role: 'Operations', status: 'Active', created: '2025-03-20', lastLogin: '2026-06-02' },
+  { id: '3', name: 'John Davidson', email: 'john@superjetglobal.com', username: 'john187', role: 'Operations', status: 'Active', created: '2025-04-10', lastLogin: '2026-06-01' },
+  { id: '4', name: 'Ahmed Khan', email: 'ahmed@superjetglobal.com', username: 'ahmed329', role: 'Operations', status: 'Inactive', created: '2025-06-05', lastLogin: '2026-05-15' },
 ]
 
 export const MOCK_CASES: AdminCase[] = MOCK_LEADS.slice(0, 10).map((l) => ({

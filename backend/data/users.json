@@ -1,30 +1,132 @@
 {
-  "procurement@superjetgroup.com": {
-    "email": "procurement@superjetgroup.com",
-    "fullName": "Procurement india"
-  },
-  "regmisandip884@gmail.com": {
-    "email": "regmisandip884@gmail.com",
-    "fullName": "Regmi sandip"
-  },
-  "riswanmohd2000@gmail.com": {
-    "email": "riswanmohd2000@gmail.com",
-    "fullName": "Riswan"
-  },
-  "ashique6259@gmail.com": {
-    "email": "ashique6259@gmail.com",
-    "fullName": "Mohamed"
-  },
-  "msfarhan2014@gmail.com": {
-    "email": "msfarhan2014@gmail.com",
-    "fullName": "Farhan Mohamed"
-  },
-  "accounts@allinoneservices.ae": {
-    "email": "accounts@allinoneservices.ae",
-    "fullName": "Zahid Mohamed"
-  },
-  "visa@superjetgroup.com": {
-    "email": "visa@superjetgroup.com",
-    "fullName": "Jinsiya"
-  }
+  "users": [
+    {
+      "id": "usr_1784787222293_8zh3i",
+      "email": "procurement@superjetgroup.com",
+      "fullName": "Procurement india",
+      "phone": "",
+      "phoneCode": "+971",
+      "passportCountry": "",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Resident",
+      "registrationSource": "sign_in",
+      "createdAt": "2026-07-23T06:13:42.291Z",
+      "lastLogin": "2026-07-23T06:13:42.291Z",
+      "loginCount": 1,
+      "isVerified": true,
+      "walletBalance": 0
+    },
+    {
+      "id": "usr_1784787222293_mtq0o",
+      "email": "regmisandip884@gmail.com",
+      "fullName": "Regmi sandip",
+      "phone": "",
+      "phoneCode": "+971",
+      "passportCountry": "",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Resident",
+      "registrationSource": "sign_in",
+      "createdAt": "2026-07-23T06:13:42.291Z",
+      "lastLogin": "2026-07-23T06:13:42.291Z",
+      "loginCount": 1,
+      "isVerified": true,
+      "walletBalance": 0
+    },
+    {
+      "id": "usr_1784787222293_a6vcm",
+      "email": "riswanmohd2000@gmail.com",
+      "fullName": "Riswan",
+      "phone": "",
+      "phoneCode": "+971",
+      "passportCountry": "",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Resident",
+      "registrationSource": "sign_in",
+      "createdAt": "2026-07-23T06:13:42.291Z",
+      "lastLogin": "2026-07-23T06:13:42.291Z",
+      "loginCount": 1,
+      "isVerified": true,
+      "walletBalance": 0
+    },
+    {
+      "id": "usr_1784787222293_yo10i",
+      "email": "ashique6259@gmail.com",
+      "fullName": "Mohamed",
+      "phone": "",
+      "phoneCode": "+971",
+      "passportCountry": "India",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Permanent Resident",
+      "registrationSource": "sign_in",
+      "createdAt": "2026-07-23T06:13:42.291Z",
+      "lastLogin": "2026-07-30T11:10:18.020Z",
+      "loginCount": 2,
+      "isVerified": true,
+      "walletBalance": 0
+    },
+    {
+      "id": "usr_1784787222293_0e9he",
+      "email": "msfarhan2014@gmail.com",
+      "fullName": "Farhan Mohamed",
+      "phone": "",
+      "phoneCode": "+971",
+      "passportCountry": "",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Resident",
+      "registrationSource": "sign_in",
+      "createdAt": "2026-07-23T06:13:42.291Z",
+      "lastLogin": "2026-07-23T06:13:42.291Z",
+      "loginCount": 1,
+      "isVerified": true,
+      "walletBalance": 0
+    },
+    {
+      "id": "usr_1784787222293_23669",
+      "email": "accounts@allinoneservices.ae",
+      "fullName": "Zahid Mohamed",
+      "phone": "",
+      "phoneCode": "+971",
+      "passportCountry": "",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Resident",
+      "registrationSource": "sign_in",
+      "createdAt": "2026-07-23T06:13:42.291Z",
+      "lastLogin": "2026-07-23T06:13:42.291Z",
+      "loginCount": 1,
+      "isVerified": true,
+      "walletBalance": 0
+    },
+    {
+      "id": "usr_1784787222293_p70ik",
+      "email": "visa@superjetgroup.com",
+      "fullName": "Jinsiya",
+      "phone": "",
+      "phoneCode": "+971",
+      "passportCountry": "",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Resident",
+      "registrationSource": "sign_in",
+      "createdAt": "2026-07-23T06:13:42.291Z",
+      "lastLogin": "2026-07-23T06:13:42.291Z",
+      "loginCount": 1,
+      "isVerified": true,
+      "walletBalance": 0
+    },
+    {
+      "id": "usr_1784787349699_0o6f2",
+      "email": "telwinbabu484@gmail.com",
+      "fullName": "Telwinbabu",
+      "phone": "",
+      "phoneCode": "+971",
+      "passportCountry": "India",
+      "residenceCountry": "UAE",
+      "residencyStatus": "Other",
+      "registrationSource": "sign_in",
+      "createdAt": "2026-07-23T06:15:49.699Z",
+      "lastLogin": "2026-07-23T09:37:09.518Z",
+      "loginCount": 1,
+      "isVerified": true,
+      "walletBalance": 0
+    }
+  ]
 }

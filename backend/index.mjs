@@ -5,13 +5,13 @@ import { createRequire } from 'module'
 import { deleteUserById, getUserByEmail, listUsers, recordUserSession, syncUserFromClient, upsertUser } from './users.mjs'
 import {
   getActiveEmailProvider,
-  getResolvedSmtpConfig,
   loadEmailSettings,
   saveEmailSettings,
   toAdminPayload,
 } from './emailSettings.mjs'
-import { createPartner, deletePartnerById, listPartners, authenticatePartner, updatePartner } from './partners.mjs'
+import { createPartner, deletePartnerById, listPublicPartners, authenticatePartner, updatePartner } from './partners.mjs'
 import { listApplications, syncApplicationFromClient } from './applications.mjs'
+import { stripSensitiveFields } from './sanitize.mjs'
 import {
   EmailNotConfiguredError,
   getMailIdentity,
@@ -161,21 +161,15 @@ app.use(cors({ origin: true }))
 app.use(express.json({ limit: '20mb' }))
 
 app.get('/api/health', (_req, res) => {
-  const smtp = getResolvedSmtpConfig()
-  res.json({
-    ok: true,
-    smtpConfigured: Boolean(smtp.user && smtp.pass),
-    emailConfigured: isEmailConfigured(),
-    activeEmailProvider: getActiveEmailProvider(),
-  })
+  res.json({ status: 'ok' })
 })
 
 app.get('/api/partners', (_req, res) => {
-  res.json({ ok: true, partners: listPartners() })
+  res.json({ ok: true, partners: listPublicPartners() })
 })
 
 app.get('/api/users', (_req, res) => {
-  res.json({ ok: true, users: listUsers() })
+  res.json({ ok: true, users: listUsers().map(stripSensitiveFields) })
 })
 
 app.post('/api/users/sync', (req, res) => {
@@ -186,7 +180,7 @@ app.post('/api/users/sync', (req, res) => {
       return res.status(400).json({ ok: false, error: 'Invalid email address.' })
     }
     const { user, isNew } = syncUserFromClient(body)
-    return res.json({ ok: true, user, isNew })
+    return res.json({ ok: true, user: stripSensitiveFields(user), isNew })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not sync user.'
     return res.status(400).json({ ok: false, error: message })
@@ -643,7 +637,7 @@ async function uploadTemporaryPublicUrl(buffer, fileName, mimeType) {
 }
 
 app.post('/api/ocr/passport-api', async (req, res) => {
-  const apiKey = String(process.env.PASSPORT_OCR_API_KEY ?? req.body?.apiKey ?? '').trim()
+  const apiKey = String(process.env.PASSPORT_OCR_API_KEY ?? '').trim()
   const imageBase64 = String(req.body?.imageBase64 ?? '').trim()
   const fileName = String(req.body?.fileName ?? 'passport.jpg')
   const mimeType = String(req.body?.mimeType ?? 'image/jpeg')
@@ -651,7 +645,7 @@ app.post('/api/ocr/passport-api', async (req, res) => {
   if (!apiKey) {
     return res.status(400).json({
       ok: false,
-      error: 'Passport OCR API key missing. Add it in Admin → Settings → OCR or set PASSPORT_OCR_API_KEY in .env',
+      error: 'Passport OCR API key missing. Set PASSPORT_OCR_API_KEY in the server environment.',
     })
   }
   if (!imageBase64) {

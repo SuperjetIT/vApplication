@@ -13,6 +13,6 @@ export function getLeadById(id: string): AdminLead | undefined {
 }
 
 /** @deprecated Applications are persisted via Database — kept for legacy b2bFlow compatibility */
-export function saveLeads(_leads: AdminLead[]) {
+export function saveLeads(_unused: AdminLead[]) {
   /* no-op */
 }

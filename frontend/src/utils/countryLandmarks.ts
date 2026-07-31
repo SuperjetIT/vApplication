@@ -4,7 +4,7 @@ import { countries } from '../data/countries'
 const COUNTRY_IMAGE_BASE = '/images/countries'
 const KNOWN_SLUGS = new Set(countries.map((c) => c.slug))
 
-export function getCountryLandmarkImage(slug: string, _width = 800, _height?: number): string {
+export function getCountryLandmarkImage(slug: string): string {
   if (KNOWN_SLUGS.has(slug)) return `${COUNTRY_IMAGE_BASE}/${slug}.jpg`
   return `${COUNTRY_IMAGE_BASE}/default.jpg`
 }

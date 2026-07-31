@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { toPublicPartner } from './sanitize.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PARTNERS_FILE = path.join(__dirname, 'data', 'partners.json')
@@ -28,6 +29,11 @@ function savePartnersToDisk(partners) {
 
 export function listPartners() {
   return loadPartnersFromDisk()
+}
+
+/** Public list — never includes password or other secrets. */
+export function listPublicPartners() {
+  return listPartners().map(toPublicPartner)
 }
 
 export function getPartnerByEmail(email) {
@@ -65,7 +71,7 @@ export function createPartner(data) {
   const partners = listPartners()
   partners.push(partner)
   savePartnersToDisk(partners)
-  return partner
+  return toPublicPartner(partner)
 }
 
 export function getPartnerById(id) {
@@ -76,9 +82,14 @@ export function updatePartner(id, updates) {
   const partners = listPartners()
   const idx = partners.findIndex((p) => String(p.id) === String(id))
   if (idx === -1) throw new Error('PARTNER_NOT_FOUND')
-  partners[idx] = { ...partners[idx], ...updates }
+  const nextUpdates = { ...updates }
+  // Empty password from client must not wipe stored password
+  if (nextUpdates.password === '' || nextUpdates.password == null) {
+    delete nextUpdates.password
+  }
+  partners[idx] = { ...partners[idx], ...nextUpdates }
   savePartnersToDisk(partners)
-  return partners[idx]
+  return toPublicPartner(partners[idx])
 }
 
 export function deletePartnerById(id) {
@@ -100,6 +111,6 @@ export function authenticatePartner(email, password) {
   if (String(partner.status ?? '').toLowerCase() !== 'active') {
     return { ok: false, error: 'PENDING_APPROVAL' }
   }
-  return { ok: true, partner }
+  return { ok: true, partner: toPublicPartner(partner) }
 }
 

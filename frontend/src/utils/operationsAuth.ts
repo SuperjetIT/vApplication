@@ -1,6 +1,7 @@
 import { MOCK_USERS, type AdminUser } from '../data/adminMockData'
 import { SUPER_ADMIN_EMAIL } from './adminAuth'
 import { clearPortalSession, getPortalRole, getPortalUser } from './portalAuth'
+import { demoOpsPassword } from '../config/demoSeed'
 
 const STORAGE_KEY = 'admin_operation_users'
 const DELETED_KEY = 'admin_operation_users_deleted'
@@ -27,11 +28,13 @@ function isDeletedUser(user: OperationStaffUser, deleted: Set<string>): boolean 
   return deleted.has(user.id) || deleted.has(user.email.toLowerCase()) || deleted.has(user.username.toLowerCase())
 }
 
-const DEFAULT_OPS = (): OperationStaffUser[] =>
-  MOCK_USERS.filter((u) => u.email !== SUPER_ADMIN_EMAIL).map((u) => ({
+const DEFAULT_OPS = (): OperationStaffUser[] => {
+  const seed = demoOpsPassword()
+  return MOCK_USERS.filter((u) => u.email !== SUPER_ADMIN_EMAIL).map((u) => ({
     ...u,
-    password: u.password ?? u.username,
+    password: String(u.password ?? '').trim() || seed,
   }))
+}
 
 export function loadOperationUsers(): OperationStaffUser[] {
   const deleted = loadDeletedKeys()

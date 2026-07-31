@@ -707,7 +707,7 @@ function CountryCard({ country, isMobile }: { country: Country; isMobile: boolea
         }}
       >
         <img
-          src={getCountryLandmarkImage(country.slug, isMobile ? 600 : 800, isMobile ? 520 : 640)}
+          src={getCountryLandmarkImage(country.slug)}
           alt={`${country.name} — ${getCountryLandmarkLabel(country.slug)}`}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
           loading="lazy"

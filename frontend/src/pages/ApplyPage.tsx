@@ -2733,7 +2733,7 @@ export default function ApplyPage() {
         attachPassportFile(travelerIndex, file)
         setScanResult((prev) => ({ ...prev, [travelerIndex]: 'failed' }))
         window.alert(
-          'Passport OCR API is enabled but no API key is configured. Add your key in Admin → Settings → OCR or set PASSPORT_OCR_API_KEY in .env.',
+          'Passport OCR API key is missing on the server. Set PASSPORT_OCR_API_KEY in the backend environment.',
         )
       } else {
         attachPassportFile(travelerIndex, file)

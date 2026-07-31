@@ -4,8 +4,6 @@ import { Database } from '../database/db'
 type StripeIntegration = {
   enabled?: boolean
   publishableKey?: string
-  secretKey?: string
-  webhookSecret?: string
   testMode?: boolean
 }
 

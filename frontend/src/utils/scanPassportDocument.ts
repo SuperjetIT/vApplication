@@ -30,10 +30,6 @@ export function isOcrAutoFillEnabled(engine: OcrEngine): boolean {
   return ints.tesseractOcr?.autoFill !== false
 }
 
-export function getPassportOcrApiKey(): string {
-  return String(integrations().passportOcrApi?.apiKey ?? '').trim()
-}
-
 export async function scanPassportDocument(
   file: File,
   onProgress: (n: number) => void,
@@ -44,7 +40,7 @@ export async function scanPassportDocument(
   }
 
   if (engine === 'passport-api') {
-    return scanPassportViaApi(file, getPassportOcrApiKey(), onProgress)
+    return scanPassportViaApi(file, onProgress)
   }
 
   return scanPassport(file, onProgress)

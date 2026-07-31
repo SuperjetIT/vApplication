@@ -57,7 +57,6 @@ async function fileToDataUrl(file: File): Promise<string> {
 
 export async function scanPassportViaApi(
   file: File,
-  apiKey: string,
   onProgress: (n: number) => void,
 ): Promise<PassportData> {
   onProgress(15)
@@ -69,7 +68,6 @@ export async function scanPassportViaApi(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       imageBase64,
-      ...(apiKey ? { apiKey } : {}),
       fileName: file.name,
       mimeType: file.type || 'image/jpeg',
     }),

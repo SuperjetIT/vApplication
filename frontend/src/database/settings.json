@@ -1,13 +1,12 @@
 {
   "integrations": {
-    "stripe": { "enabled": false, "publishableKey": "", "secretKey": "", "testMode": true },
-    "sherpa": { "enabled": false, "apiKey": "", "environment": "sandbox" },
-    "mailchimp": { "enabled": false, "apiKey": "", "audienceId": "", "fromEmail": "no-reply@superjetglobal.com" },
-    "whatsapp": { "enabled": false, "phoneNumberId": "", "accessToken": "" },
+    "stripe": { "enabled": false, "publishableKey": "", "testMode": true },
+    "sherpa": { "enabled": false, "environment": "sandbox" },
+    "mailchimp": { "enabled": false, "audienceId": "", "fromEmail": "no-reply@superjetglobal.com" },
+    "whatsapp": { "enabled": false, "phoneNumberId": "" },
     "tesseractOcr": { "enabled": true, "autoFill": true },
     "passportOcrApi": {
       "enabled": true,
-      "apiKey": "",
       "autoFill": true
     }
   },

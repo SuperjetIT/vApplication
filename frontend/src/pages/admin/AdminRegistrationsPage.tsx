@@ -6,7 +6,6 @@ import { AdminEmptyState } from '../../components/admin/AdminEmptyState'
 import { AdminToast } from '../../components/admin/AdminToast'
 import {
   BRAND,
-  BRAND_BLUE,
   BORDER,
   PAGE_BG,
   SUCCESS,
@@ -20,7 +19,6 @@ import {
   TEXT_PRIMARY,
   TEXT_SECONDARY,
 } from '../../components/admin/adminTheme'
-import { AGENT_LOGIN_PATH } from '../../config/portalRoutes'
 import { AdminCredentialRow } from '../../components/admin/AdminCredentialRow'
 import { usePortalBase } from '../../hooks/usePortalBase'
 import { useDatabaseListener } from '../../hooks/useDatabase'
@@ -29,7 +27,7 @@ import { syncApplicationsFromServer } from '../../utils/applicationSync'
 import { approvePartnerOnServer, createAdminPartnerOnServer, syncPartnersFromServer } from '../../utils/partnerSync'
 import { syncUsersFromServer } from '../../utils/userSync'
 import { sanitizeInput } from '../../utils/sanitizeInput'
-import { countUserApplications, isB2cRegistrationRow } from '../../utils/adminUserFilters'
+import { isB2cRegistrationRow } from '../../utils/adminUserFilters'
 
 type RegisterChannel = 'b2b' | 'b2c'
 

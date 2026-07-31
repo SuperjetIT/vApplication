@@ -1376,7 +1376,7 @@ export default function VisaPage() {
         }}
       >
         <img
-          src={getCountryLandmarkImage(country.slug, 1400, 600)}
+          src={getCountryLandmarkImage(country.slug)}
           alt={`${country.name} — ${getCountryLandmarkLabel(country.slug)}`}
           style={{
             position: 'absolute',

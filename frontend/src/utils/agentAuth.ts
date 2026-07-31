@@ -8,7 +8,7 @@ export type StoredAgent = AdminAgent & { password: string }
 const DEFAULT_AGENTS = (): StoredAgent[] =>
   MOCK_AGENTS.map((a) => ({
     ...a,
-    password: a.password,
+    password: a.password ?? '',
     walletBalance: a.walletBalance ?? DEFAULT_WALLET,
   }))
 

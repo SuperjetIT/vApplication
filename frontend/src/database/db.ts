@@ -52,9 +52,38 @@ const defaultDb: DbShape = {
 let db: DbShape = { ...defaultDb }
 
 import { STORAGE_KEY as STORE_KEY } from '../config/storageKeys'
+import { demoAdminPassword, demoOpsPassword, demoPartnerPassword } from '../config/demoSeed'
 
 export { STORE_KEY as STORAGE_KEY }
 export const DB_CHANGED_EVENT = 'superVisaDbChanged'
+
+const CLIENT_FORBIDDEN_INTEGRATION_KEYS = new Set([
+  'secretKey',
+  'webhookSecret',
+  'apiKey',
+  'accessToken',
+  'pass',
+  'password',
+])
+
+function sanitizeIntegrationRecord(value: unknown): GenericRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const out: GenericRecord = {}
+  for (const [k, v] of Object.entries(value as GenericRecord)) {
+    if (CLIENT_FORBIDDEN_INTEGRATION_KEYS.has(k)) continue
+    out[k] = v
+  }
+  return out
+}
+
+function sanitizeSettings(settings: GenericRecord): GenericRecord {
+  const integrations = (settings.integrations as GenericRecord | undefined) ?? {}
+  const nextIntegrations: GenericRecord = {}
+  for (const [name, cfg] of Object.entries(integrations)) {
+    nextIntegrations[name] = sanitizeIntegrationRecord(cfg)
+  }
+  return { ...settings, integrations: nextIntegrations }
+}
 
 function ensureDbShape() {
   if (!Array.isArray(db.users)) db.users = [...defaultDb.users]
@@ -79,16 +108,51 @@ function ensureAdminsSeeded() {
   if (!Array.isArray(db.admins)) db.admins = []
   const email = String(defaultAdmin.email).toLowerCase()
   const idx = db.admins.findIndex((a) => String(a.email ?? '').toLowerCase() === email)
+  const seedPassword = demoAdminPassword()
   if (idx === -1) {
-    db.admins.unshift({ ...defaultAdmin })
+    db.admins.unshift({
+      ...defaultAdmin,
+      password: seedPassword || String(defaultAdmin.password ?? ''),
+    })
     saveToStorage()
     return
   }
   const current = db.admins[idx]
-  if (!current.username || !current.password) {
-    db.admins[idx] = { ...defaultAdmin, ...current, username: current.username ?? defaultAdmin.username, password: current.password ?? defaultAdmin.password }
+  const nextPassword =
+    String(current.password ?? '').trim() || seedPassword || String(defaultAdmin.password ?? '')
+  if (!current.username || !String(current.password ?? '').trim()) {
+    db.admins[idx] = {
+      ...defaultAdmin,
+      ...current,
+      username: current.username ?? defaultAdmin.username,
+      password: nextPassword,
+    }
     saveToStorage()
   }
+}
+
+function ensurePartnerSeedPassword() {
+  const seed = demoPartnerPassword()
+  if (!seed || !Array.isArray(db.partners)) return
+  let changed = false
+  db.partners = db.partners.map((p) => {
+    if (String(p.password ?? '').trim()) return p
+    changed = true
+    return { ...p, password: seed }
+  })
+  if (changed) saveToStorage()
+}
+
+function ensureOperatorSeedPassword() {
+  const seed = demoOpsPassword()
+  if (!seed || !Array.isArray(db.operators)) return
+  let changed = false
+  db.operators = db.operators.map((o) => {
+    if (String(o.password ?? '').trim()) return o
+    changed = true
+    return { ...o, password: seed }
+  })
+  if (changed) saveToStorage()
 }
 
 function loadFromStorage() {
@@ -102,6 +166,9 @@ function loadFromStorage() {
   }
   ensureDbShape()
   ensureAdminsSeeded()
+  ensurePartnerSeedPassword()
+  ensureOperatorSeedPassword()
+  db.settings = sanitizeSettings(db.settings as GenericRecord)
   if (!Array.isArray(db.walletTransactions)) db.walletTransactions = []
 }
 
@@ -212,6 +279,11 @@ export const Database = {
     const idx = email
       ? db.partners.findIndex((p) => String(p.email ?? '').toLowerCase() === email)
       : db.partners.findIndex((p) => String(p.id) === String(data.id))
+    const incoming = { ...data }
+    // API responses no longer include password — do not wipe local credential
+    if (incoming.password === '' || incoming.password == null) {
+      delete incoming.password
+    }
     if (idx === -1) {
       const partner: GenericRecord = {
         id: generateId('ptn'),
@@ -221,13 +293,13 @@ export const Database = {
         walletBalance: 0,
         status: 'pending',
         createdAt: new Date().toISOString(),
-        ...data,
+        ...incoming,
       }
       db.partners.push(partner)
       saveToStorage()
       return partner
     }
-    db.partners[idx] = { ...db.partners[idx], ...data }
+    db.partners[idx] = { ...db.partners[idx], ...incoming }
     saveToStorage()
     return db.partners[idx]
   },
@@ -686,12 +758,13 @@ export const Database = {
   },
   getRecentActivity: (limit = 20) => db.activities.slice(0, limit),
 
-  getSettings: () => db.settings,
+  getSettings: () => sanitizeSettings(db.settings as GenericRecord),
   updateIntegrationSettings: (integration: string, updates: GenericRecord) => {
     const integrations = (db.settings.integrations as GenericRecord | undefined) ?? {}
     const current = (integrations[integration] as GenericRecord | undefined) ?? {}
-    integrations[integration] = { ...current, ...updates }
-    db.settings = { ...db.settings, integrations }
+    const safeUpdates = sanitizeIntegrationRecord(updates)
+    integrations[integration] = { ...sanitizeIntegrationRecord(current), ...safeUpdates }
+    db.settings = sanitizeSettings({ ...db.settings, integrations })
     saveToStorage()
     return integrations[integration]
   },

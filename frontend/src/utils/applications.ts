@@ -1,4 +1,4 @@
-import { getCountry, type Country } from '../data/countries'
+import { getCountry } from '../data/countries'
 import type { LeadStatus } from '../types/adminTypes'
 import {
   getApplicationForUserFromDb,
@@ -62,12 +62,7 @@ export function getCountryForApplication(app: UserApplication) {
 }
 
 /** @deprecated B2C applications are created via Database.createApplication in ApplyPage */
-export function createApplication(
-  _email: string,
-  _country: Country,
-  _travelers: number,
-  _totalAed: number,
-): UserApplication {
+export function createApplication(): UserApplication {
   throw new Error('createApplication is deprecated — use Database.createApplication')
 }
 

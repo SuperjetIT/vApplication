@@ -12,10 +12,13 @@ dist
 dist-ssr
 .vite
 *.local
+
+# Secrets / env (keep .env.example tracked)
 .env
 .env.*
 !.env.example
 backend/email-settings.json
+server/email-settings.json
 
 # Editor directories and files
 .vscode/*
